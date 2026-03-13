@@ -1,0 +1,242 @@
+---
+title: 'Send Email'
+api: 'POST /send_email'
+description: 'Send transactional emails via Brevo (SendinBlue)'
+---
+
+## Overview
+
+This endpoint sends transactional emails using the Brevo (formerly SendinBlue) email service. It supports HTML content and is used for ticket confirmations, notifications, and other automated communications.
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  Request data wrapper
+  
+  <ParamField body="to_email" type="string" required>
+    Recipient email address
+  </ParamField>
+  
+  <ParamField body="to_name" type="string" required>
+    Recipient name
+  </ParamField>
+  
+  <ParamField body="subject" type="string" required>
+    Email subject line
+  </ParamField>
+  
+  <ParamField body="html_send" type="string" required>
+    HTML content of the email body
+  </ParamField>
+</ParamField>
+
+## Response
+
+### Success Response
+
+<ResponseField name="message" type="string">
+  "enviado" on success
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  200 for success
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    true on success
+  </ResponseField>
+  
+  <ResponseField name="mensaje" type="object">
+    Response from Brevo API
+    
+    <ResponseField name="messageId" type="string">
+      Unique message identifier from Brevo
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Error Response
+
+<ResponseField name="message" type="string">
+  "No Enviado" on failure
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  400 for failure
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    false on failure
+  </ResponseField>
+  
+  <ResponseField name="error" type="object">
+    Error details from Brevo or system
+  </ResponseField>
+</ResponseField>
+
+## Email Configuration
+
+### Sender Information
+- **Name**: TMT
+- **Email**: carticket@trademastertransactions.com
+
+### Email Service
+- **Provider**: Brevo (SendinBlue)
+- **API Endpoint**: https://api.brevo.com/v3/smtp/email
+- **Authentication**: API key (configured in system)
+
+## Example Request
+
+```json
+{
+  "data": {
+    "to_email": "customer@example.com",
+    "to_name": "Jane Smith",
+    "subject": "Your Concert Tickets - Order Confirmation",
+    "html_send": "<html><body><h1>Thank you for your purchase!</h1><p>Dear Jane Smith,</p><p>Your order has been confirmed. Order ID: <strong>abc123xyz789</strong></p><p>Event: Concert 2026</p><p>Tickets: 2x VIP</p><p>Total: $100.00</p><br><p>See you at the event!</p></body></html>"
+  }
+}
+```
+
+## Example Success Response
+
+```json
+{
+  "message": "enviado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "mensaje": {
+      "messageId": "<202603131430.12345678@smtp-relay.brevo.com>"
+    }
+  }
+}
+```
+
+## Example Error Response
+
+```json
+{
+  "message": "No Enviado",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "error": {
+      "code": "invalid_parameter",
+      "message": "Email address is invalid"
+    }
+  }
+}
+```
+
+## Common Email Templates
+
+### Order Confirmation
+```html
+<html>
+<body style="font-family: Arial, sans-serif;">
+  <h1>Order Confirmation</h1>
+  <p>Dear {{customer_name}},</p>
+  <p>Thank you for your purchase!</p>
+  
+  <h2>Order Details</h2>
+  <ul>
+    <li><strong>Order ID:</strong> {{order_id}}</li>
+    <li><strong>Event:</strong> {{event_name}}</li>
+    <li><strong>Date:</strong> {{event_date}}</li>
+    <li><strong>Venue:</strong> {{venue_name}}</li>
+  </ul>
+  
+  <h2>Tickets</h2>
+  <ul>
+    {{#tickets}}
+    <li>{{zone}} - Seat {{seat_number}} - ${{price}}</li>
+    {{/tickets}}
+  </ul>
+  
+  <p><strong>Total:</strong> ${{total_amount}}</p>
+  
+  <p>Your tickets are attached to this email.</p>
+  
+  <p>Best regards,<br>TMT Team</p>
+</body>
+</html>
+```
+
+### Ticket Delivery
+```html
+<html>
+<body style="font-family: Arial, sans-serif;">
+  <h1>Your Tickets</h1>
+  <p>Dear {{customer_name}},</p>
+  <p>Your tickets for <strong>{{event_name}}</strong> are ready!</p>
+  
+  <p>Please find your tickets attached. You can also access them in your account.</p>
+  
+  <h2>Important Information</h2>
+  <ul>
+    <li>Arrive 30 minutes before the event</li>
+    <li>Bring a valid ID</li>
+    <li>Present QR code at entrance</li>
+  </ul>
+  
+  <p>See you at the event!</p>
+</body>
+</html>
+```
+
+### Event Reminder
+```html
+<html>
+<body style="font-family: Arial, sans-serif;">
+  <h1>Event Reminder</h1>
+  <p>Dear {{customer_name}},</p>
+  <p>This is a reminder that <strong>{{event_name}}</strong> is coming up soon!</p>
+  
+  <h2>Event Details</h2>
+  <ul>
+    <li><strong>Date:</strong> {{event_date}}</li>
+    <li><strong>Time:</strong> {{event_time}}</li>
+    <li><strong>Venue:</strong> {{venue_name}}</li>
+    <li><strong>Address:</strong> {{venue_address}}</li>
+  </ul>
+  
+  <p>Don't forget your tickets!</p>
+  
+  <p>We look forward to seeing you there.</p>
+</body>
+</html>
+```
+
+## Use Cases
+
+- **Order confirmations**: Send immediate confirmation after purchase
+- **Ticket delivery**: Email tickets with QR codes
+- **Event reminders**: Notify customers before events
+- **Password resets**: Security-related emails
+- **Account notifications**: Welcome emails, updates
+- **Invoice delivery**: Send billing documents
+
+## Best Practices
+
+1. **HTML Validation**: Ensure HTML is well-formed
+2. **Responsive Design**: Use mobile-friendly templates
+3. **Plain Text Alternative**: Consider providing text version
+4. **Personalization**: Use customer name and details
+5. **Clear Subject Lines**: Be descriptive and concise
+6. **Branding**: Include company logo and colors
+7. **Call to Action**: Clear next steps for recipients
+8. **Unsubscribe Link**: Include for marketing emails
+
+## Rate Limits
+
+Refer to Brevo's API documentation for current rate limits. Typically:
+- Free tier: 300 emails/day
+- Paid tiers: Higher limits based on plan
+
+## Related Endpoints
+
+- `send_notifications` - Push notifications to mobile apps
+- `process_order_billing` - Generates invoices that can be emailed

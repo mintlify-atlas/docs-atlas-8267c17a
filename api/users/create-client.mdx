@@ -1,0 +1,245 @@
+---
+title: "Create Client"
+api: "POST https://your-project.cloudfunctions.net/create_client"
+description: "Create a new client user account with company information and authentication credentials"
+---
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  User data container object
+  
+  <ParamField body="data.name" type="string" required>
+    Full legal name of the client
+  </ParamField>
+  
+  <ParamField body="data.email" type="string" required>
+    Email address for authentication and communication
+  </ParamField>
+  
+  <ParamField body="data.password" type="string" required>
+    Password for user authentication
+  </ParamField>
+  
+  <ParamField body="data.name_commercial" type="string" required>
+    Commercial or business name
+  </ParamField>
+  
+  <ParamField body="data.phone" type="string" required>
+    Contact phone number
+  </ParamField>
+  
+  <ParamField body="data.status" type="boolean" required>
+    Account active status
+  </ParamField>
+  
+  <ParamField body="data.id" type="string" required>
+    Identification document number
+  </ParamField>
+  
+  <ParamField body="data.id_type" type="string" required>
+    Type of identification document
+  </ParamField>
+  
+  <ParamField body="data.city" type="string" required>
+    City for address
+  </ParamField>
+  
+  <ParamField body="data.country" type="string" required>
+    Country for address
+  </ParamField>
+  
+  <ParamField body="data.line" type="string" required>
+    Street address line
+  </ParamField>
+  
+  <ParamField body="data.zip_code" type="string" required>
+    Postal/ZIP code
+  </ParamField>
+  
+  <ParamField body="data.account_type" type="string" required>
+    Type of account
+  </ParamField>
+  
+  <ParamField body="data.commercial_registry" type="string">
+    Commercial registry number
+  </ParamField>
+  
+  <ParamField body="data.last_assembly_minutes" type="string">
+    Last assembly minutes document reference
+  </ParamField>
+  
+  <ParamField body="data.fiscal_info" type="object">
+    Fiscal information object
+  </ParamField>
+  
+  <ParamField body="data.commercial_license" type="string">
+    Commercial license number
+  </ParamField>
+  
+  <ParamField body="data.taxpayer_type" type="string">
+    Type of taxpayer classification
+  </ParamField>
+  
+  <ParamField body="data.legal_representative" type="object">
+    Legal representative information
+  </ParamField>
+  
+  <ParamField body="data.contact_person" type="object">
+    Contact person information
+  </ParamField>
+  
+  <ParamField body="data.bank_accounts" type="array">
+    Array of bank account objects
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="data.uid" type="string">
+    Unique identifier for the created user (present on success)
+  </ResponseField>
+  
+  <ResponseField name="data.error" type="object">
+    Error details (present on failure)
+  </ResponseField>
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/create_client \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "Acme Corporation Inc.",
+      "email": "contact@acmecorp.com",
+      "password": "SecurePass123!",
+      "name_commercial": "Acme Corp",
+      "phone": "+1-555-0123",
+      "status": true,
+      "id": "123456789",
+      "id_type": "TAX_ID",
+      "city": "New York",
+      "country": "USA",
+      "line": "123 Business Ave",
+      "zip_code": "10001",
+      "account_type": "enterprise",
+      "commercial_registry": "CR-2024-001",
+      "taxpayer_type": "corporation",
+      "fiscal_info": {
+        "tax_id": "12-3456789",
+        "regime": "general"
+      },
+      "bank_accounts": [
+        {
+          "bank": "First National Bank",
+          "account_number": "1234567890",
+          "account_type": "checking"
+        }
+      ]
+    }
+  }'
+```
+
+```javascript JavaScript
+const createClient = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/create_client',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          name: 'Acme Corporation Inc.',
+          email: 'contact@acmecorp.com',
+          password: 'SecurePass123!',
+          name_commercial: 'Acme Corp',
+          phone: '+1-555-0123',
+          status: true,
+          id: '123456789',
+          id_type: 'TAX_ID',
+          city: 'New York',
+          country: 'USA',
+          line: '123 Business Ave',
+          zip_code: '10001',
+          account_type: 'enterprise',
+          commercial_registry: 'CR-2024-001',
+          taxpayer_type: 'corporation',
+          fiscal_info: {
+            tax_id: '12-3456789',
+            regime: 'general'
+          },
+          bank_accounts: [
+            {
+              bank: 'First National Bank',
+              account_number: '1234567890',
+              account_type: 'checking'
+            }
+          ]
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Success Response
+{
+  "message": "Ingresado con el ID: abc123xyz456.",
+  "status": 200,
+  "data": {
+    "uid": "abc123xyz456"
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use by another account."
+    }
+  }
+}
+```
+
+</ResponseExample>
+
+## Error Codes
+
+| Status Code | Description |
+| --- | --- |
+| 200 | Client successfully created |
+| 400 | Error creating user (email already exists, invalid data, etc.) |
+
+<Note>
+  - The client is created in both Firebase Authentication and the `u_clients` Firestore collection
+  - The password must meet Firebase Authentication requirements
+  - Email addresses must be unique across the system
+  - The `date.create` field is automatically set to the current timestamp
+  - Initial counters for collaborators, contracts, and events are set to 0
+</Note>

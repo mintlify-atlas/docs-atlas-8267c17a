@@ -1,0 +1,305 @@
+---
+title: 'Sales Metrics'
+api: 'Multiple endpoints'
+description: 'Comprehensive sales and performance metrics'
+---
+
+## Overview
+
+The TMT API provides multiple endpoints for sales metrics and analytics. These endpoints deliver insights into ticket sales, revenue, office performance, and platform statistics.
+
+## Total Sales
+
+### Endpoint
+`POST /total_sales`
+
+### Description
+Get total sales aggregated by date with overall totals.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  <ParamField body="event_id" type="string">Filter by event ID</ParamField>
+  <ParamField body="from" type="string">Start date (YYYY-MM-DD)</ParamField>
+  <ParamField body="to" type="string">End date (YYYY-MM-DD)</ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  <ResponseField name="totales_date" type="array">
+    Daily sales breakdown
+    <ResponseField name="date" type="string">Sale date</ResponseField>
+    <ResponseField name="total" type="number">Total amount for that date</ResponseField>
+  </ResponseField>
+  <ResponseField name="totales" type="number">Grand total across all dates</ResponseField>
+</ResponseField>
+
+### Example
+
+```json
+{
+  "message": "Total Ventas",
+  "status": 200,
+  "data": {
+    "totales_date": [
+      { "date": "2026-03-01", "total": 5420.50 },
+      { "date": "2026-03-02", "total": 8350.00 },
+      { "date": "2026-03-03", "total": 12100.25 }
+    ],
+    "totales": 25870.75
+  }
+}
+```
+
+---
+
+## Total Sales by Client
+
+### Endpoint
+`POST /total_sales_client`
+
+### Description
+Get total sales for a specific client aggregated by date.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  <ParamField body="client_id" type="string" required>Client ID to filter</ParamField>
+  <ParamField body="from" type="string">Start date</ParamField>
+  <ParamField body="to" type="string">End date</ParamField>
+</ParamField>
+
+### Response
+Same structure as `total_sales`
+
+---
+
+## Number of Tickets Sold
+
+### Endpoint
+`POST /number_tickets_sold`
+
+### Description
+Get total count of tickets sold for an event or date range.
+
+### Request Body
+
+<ParamField body="data" type="object">
+  <ParamField body="event_id" type="string">Event ID</ParamField>
+  <ParamField body="from" type="string">Start date</ParamField>
+  <ParamField body="to" type="string">End date</ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  <ResponseField name="sold" type="array">
+    <ResponseField name="seats_sold" type="number">Total tickets sold</ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example
+
+```json
+{
+  "message": "Datos cantidad de tickets vendidos",
+  "status": 200,
+  "data": {
+    "sold": [
+      { "seats_sold": 1247 }
+    ]
+  }
+}
+```
+
+---
+
+## Tickets vs Tickets Sold
+
+### Endpoint
+`POST /number_tickets_vs_sold`
+
+### Description
+Compare total available seats with tickets sold and calculate sell-through percentage.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  <ParamField body="event_id" type="string" required>Event ID</ParamField>
+  <ParamField body="from" type="string">Start date</ParamField>
+  <ParamField body="to" type="string">End date</ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  <ResponseField name="sold" type="array">
+    <ResponseField name="seats_allocated" type="number">Total available seats</ResponseField>
+    <ResponseField name="seats_sold" type="number">Tickets sold</ResponseField>
+    <ResponseField name="percentage_sold" type="number">Sell-through percentage</ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example
+
+```json
+{
+  "message": "Datos cantidad de tickets vs tickets vendidos",
+  "status": 200,
+  "data": {
+    "sold": [
+      {
+        "seats_allocated": 5000,
+        "seats_sold": 3742,
+        "percentage_sold": 74.84
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Sales by Box Office
+
+### Endpoint
+`POST /sold_by_office`
+
+### Description
+Breakdown of sales by box office/point of sale.
+
+### Request Body
+
+<ParamField body="data" type="object">
+  <ParamField body="event_id" type="string">Event ID</ParamField>
+  <ParamField body="from" type="string">Start date</ParamField>
+  <ParamField body="to" type="string">End date</ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  <ResponseField name="office_sold" type="array">
+    Sales by office
+    <ResponseField name="event_id" type="string">Event ID</ResponseField>
+    <ResponseField name="office_name" type="string">Office name</ResponseField>
+    <ResponseField name="event_name" type="string">Event name</ResponseField>
+    <ResponseField name="total_sales" type="number">Number of tickets sold</ResponseField>
+    <ResponseField name="total_amount" type="number">Revenue amount</ResponseField>
+  </ResponseField>
+  <ResponseField name="total_tickets" type="number">Total tickets across all offices</ResponseField>
+  <ResponseField name="total_amount" type="number">Total revenue across all offices</ResponseField>
+</ResponseField>
+
+### Example
+
+```json
+{
+  "message": "Datos cantidad de tickets vendidos por taquillas",
+  "status": 200,
+  "data": {
+    "office_sold": [
+      {
+        "event_id": "event_001",
+        "office_name": "Main Box Office",
+        "event_name": "Concert 2026",
+        "total_sales": 450,
+        "total_amount": 22500.00
+      },
+      {
+        "event_id": "event_001",
+        "office_name": "Online Portal",
+        "event_name": "Concert 2026",
+        "total_sales": 1200,
+        "total_amount": 60000.00
+      }
+    ],
+    "total_tickets": 1650,
+    "total_amount": 82500.00
+  }
+}
+```
+
+---
+
+## Sales by Currency (USB)
+
+### Endpoint
+`POST /sold_by_usbs`
+
+### Description
+Sales breakdown by office with currency separation (USD vs VEF).
+
+### Request Body
+
+<ParamField body="data" type="object">
+  <ParamField body="event_id" type="string">Event ID</ParamField>
+  <ParamField body="from" type="string">Start date</ParamField>
+  <ParamField body="to" type="string">End date</ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  <ResponseField name="office_sold" type="array">
+    <ResponseField name="event_id" type="string">Event ID</ResponseField>
+    <ResponseField name="office_name" type="string">Office name</ResponseField>
+    <ResponseField name="event_name" type="string">Event name</ResponseField>
+    <ResponseField name="amount_currency" type="string">Currency (USD/VEF)</ResponseField>
+    <ResponseField name="total_amount" type="number">Amount in that currency</ResponseField>
+  </ResponseField>
+  <ResponseField name="total_amount_bs" type="number">Total in VEF (Bolívares)</ResponseField>
+  <ResponseField name="total_amount_usd" type="number">Total in USD</ResponseField>
+</ResponseField>
+
+### Example
+
+```json
+{
+  "message": "Datos ventas",
+  "status": 200,
+  "data": {
+    "office_sold": [
+      {
+        "event_id": "event_001",
+        "office_name": "Main Box Office",
+        "event_name": "Concert 2026",
+        "amount_currency": "USD",
+        "total_amount": 22500.00
+      },
+      {
+        "event_id": "event_001",
+        "office_name": "Main Box Office",
+        "event_name": "Concert 2026",
+        "amount_currency": "VEF",
+        "total_amount": 450000.00
+      }
+    ],
+    "total_amount_bs": 450000.00,
+    "total_amount_usd": 22500.00
+  }
+}
+```
+
+## Data Source
+
+All sales metrics query the PostgreSQL database tables:
+- `orders` - Order records with ticket arrays
+- `orders_transactions` - Payment transactions with currency details
+- `orders_payout` - Distribution and payout records
+
+## Common Filters
+
+All endpoints support these optional filters:
+- `event_id` - Filter by specific event
+- `from` - Start date (YYYY-MM-DD)
+- `to` - End date (YYYY-MM-DD)
+
+## Use Cases
+
+- **Revenue tracking**: Monitor daily, weekly, monthly sales
+- **Performance analysis**: Compare box offices, events, time periods
+- **Capacity planning**: Track sell-through rates
+- **Multi-currency reporting**: Separate USD and VEF analytics
+- **Client reporting**: Generate client-specific sales reports

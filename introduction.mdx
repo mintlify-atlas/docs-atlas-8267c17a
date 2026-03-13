@@ -1,0 +1,81 @@
+---
+title: "Introduction"
+description: "Firebase Cloud Functions backend for comprehensive ticket management and event ticketing"
+---
+
+# TMT API
+
+TMT API is a robust Firebase Cloud Functions backend that powers ticket management and event ticketing platforms. Built for scalability and flexibility, it provides comprehensive APIs for managing events, tickets, orders, payments, and access control.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-User System" icon="users">
+    Role-based access for clients, collaborators, and staff with granular permissions
+  </Card>
+  <Card title="Event Management" icon="calendar">
+    Complete event lifecycle management with ticket generation and seat mapping
+  </Card>
+  <Card title="Payment Processing" icon="credit-card">
+    Multi-currency support with Stripe, Mercantil, and Banco de Venezuela integrations
+  </Card>
+  <Card title="Access Control" icon="shield">
+    Real-time entry/exit tracking and credential validation for events
+  </Card>
+  <Card title="Seating Management" icon="couch">
+    Integration with Seats.io for venue layouts and seat reservations
+  </Card>
+  <Card title="Analytics" icon="chart-line">
+    Real-time metrics for sales, revenue, and platform performance
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running with TMT API in minutes
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn how to authenticate and secure your API requests
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Understand the architecture and data models
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/users/create-client">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+TMT API is designed for:
+
+- **Event Organizers**: Manage large-scale events with thousands of attendees
+- **Venue Operators**: Control access, track capacity, and manage seating
+- **Ticket Distributors**: Sell tickets through multiple channels with real-time inventory
+- **Mobile Apps**: Provide seamless ticket purchasing and access via mobile devices
+
+## Architecture
+
+The TMT API is built on Firebase Cloud Functions, leveraging:
+
+- **Firebase Admin SDK** for authentication and Firestore database operations
+- **PostgreSQL** for transactional data and reporting
+- **Cloud Functions v2** for serverless compute and scalability
+- **Third-party integrations** for payments, seating, and billing
+
+<Note>
+  All functions are exposed as HTTPS callable endpoints, secured with Firebase Authentication.
+</Note>
+
+## Support
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/Zeto96/tmt-doc-5">
+    View source code and contribute
+  </Card>
+  <Card title="Guides" icon="book-open" href="/guides/user-management">
+    Step-by-step guides for common tasks
+  </Card>
+</CardGroup>

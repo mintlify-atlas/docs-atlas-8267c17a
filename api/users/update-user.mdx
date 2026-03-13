@@ -1,0 +1,261 @@
+---
+title: "Update User"
+api: "POST https://your-project.cloudfunctions.net/update_email"
+description: "Update user email address or password"
+---
+
+## Available Endpoints
+
+This API provides two update endpoints:
+
+- `update_email` - Updates a user's email address
+- `update_password` - Updates a user's password
+
+## Update Email
+
+Updates a user's email address in both Firebase Authentication and Firestore.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Update data container object
+  
+  <ParamField body="data.uid" type="string" required>
+    The unique identifier of the user to update
+  </ParamField>
+  
+  <ParamField body="data.email" type="string" required>
+    The new email address
+  </ParamField>
+  
+  <ParamField body="data.emailold" type="string" required>
+    The current/old email address
+  </ParamField>
+  
+  <ParamField body="data.collection" type="string" required>
+    The Firestore collection name (e.g., "u_clients", "u_staff", "u_collaborators")
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="data.update" type="boolean">
+    True if update was successful, false otherwise
+  </ResponseField>
+  
+  <ResponseField name="data.error" type="object">
+    Error details (present on failure)
+  </ResponseField>
+</ResponseField>
+
+### Request Example
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/update_email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "uid": "abc123xyz456",
+      "email": "newemail@acmecorp.com",
+      "emailold": "oldemail@acmecorp.com",
+      "collection": "u_clients"
+    }
+  }'
+```
+
+```javascript JavaScript
+const updateUserEmail = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/update_email',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          uid: 'abc123xyz456',
+          email: 'newemail@acmecorp.com',
+          emailold: 'oldemail@acmecorp.com',
+          collection: 'u_clients'
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+### Response Example
+
+<ResponseExample>
+
+```json Success Response
+{
+  "message": "Usuario: Email Actualizado!",
+  "status": 200,
+  "data": {
+    "update": true
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "Usuario: Email No Actualizado!!",
+  "status": 400,
+  "data": {
+    "update": false,
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use."
+    }
+  }
+}
+```
+
+</ResponseExample>
+
+### Error Codes
+
+| Status Code | Description |
+| --- | --- |
+| 200 | Email successfully updated |
+| 400 | Error updating email (already exists, invalid format, etc.) |
+
+---
+
+## Update Password
+
+Updates a user's password in Firebase Authentication.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Update data container object
+  
+  <ParamField body="data.uid" type="string" required>
+    The unique identifier of the user to update
+  </ParamField>
+  
+  <ParamField body="data.password" type="string" required>
+    The new password
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="data.update" type="boolean">
+    True if update was successful, false otherwise
+  </ResponseField>
+  
+  <ResponseField name="data.error" type="object">
+    Error details (present on failure)
+  </ResponseField>
+</ResponseField>
+
+### Request Example
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/update_password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "uid": "abc123xyz456",
+      "password": "NewSecurePass123!"
+    }
+  }'
+```
+
+```javascript JavaScript
+const updateUserPassword = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/update_password',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          uid: 'abc123xyz456',
+          password: 'NewSecurePass123!'
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+### Response Example
+
+<ResponseExample>
+
+```json Success Response
+{
+  "message": "Usuario: Password Actualizado!",
+  "status": 200,
+  "data": {
+    "update": true
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "Usuario: Password No Actualizado!!",
+  "status": 400,
+  "data": {
+    "update": false,
+    "error": {
+      "code": "auth/weak-password",
+      "message": "Password should be at least 6 characters."
+    }
+  }
+}
+```
+
+</ResponseExample>
+
+<Note>
+  - When updating email, both Firebase Authentication and Firestore records are updated
+  - The `date.last_update` field is automatically updated with the current timestamp
+  - Email updates require the old email to match existing records
+  - Password updates must meet Firebase Authentication requirements (minimum 6 characters)
+  - All update operations use CORS with wildcard origin (*)
+</Note>

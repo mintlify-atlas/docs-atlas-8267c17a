@@ -1,0 +1,323 @@
+---
+title: 'Process Order Billing'
+api: 'POST /process_order_billing'
+description: 'Generate and emit invoice for a completed order'
+---
+
+## Overview
+
+This endpoint processes billing for a completed order. It retrieves order details, generates billing data with proper tax calculations (VAT and IGTF), obtains a sequential invoice number, and emits the invoice to the external billing system.
+
+This function is designed to run independently to avoid timeouts in the order processing flow.
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  Request data wrapper
+  
+  <ParamField body="order_id" type="string" required>
+    Order ID to process billing for
+  </ParamField>
+  
+  <ParamField body="order_data" type="object" required>
+    Complete order data object
+    
+    <ParamField body="amount" type="number">
+      Total order amount in USD
+    </ParamField>
+    
+    <ParamField body="event_id" type="string">
+      Event identifier
+    </ParamField>
+    
+    <ParamField body="event_name" type="string">
+      Event name/title
+    </ParamField>
+    
+    <ParamField body="client_id" type="string">
+      Client (producer) ID
+    </ParamField>
+    
+    <ParamField body="client_name" type="string">
+      Client name
+    </ParamField>
+    
+    <ParamField body="box_office_name" type="string">
+      Box office/point of sale name
+    </ParamField>
+    
+    <ParamField body="tickets" type="array">
+      Array of ticket objects
+      <ParamField body="ticket_id" type="string">Ticket identifier</ParamField>
+      <ParamField body="amount" type="number">Ticket price in USD</ParamField>
+      <ParamField body="zone" type="string">Seating zone/section</ParamField>
+      <ParamField body="metadata" type="object">Ticket metadata</ParamField>
+    </ParamField>
+    
+    <ParamField body="transactions" type="array">
+      Payment transactions array
+      <ParamField body="amount" type="number">Transaction amount</ParamField>
+      <ParamField body="payment_name" type="string">Payment method (Zelle, Cash, etc.)</ParamField>
+      <ParamField body="payment_id" type="string">Payment identifier</ParamField>
+      <ParamField body="custody_account" type="object">Custody account details</ParamField>
+    </ParamField>
+    
+    <ParamField body="purchaser_info" type="object">
+      Purchaser/buyer information
+      <ParamField body="email" type="string">Email address</ParamField>
+      <ParamField body="name" type="string">Full name</ParamField>
+      <ParamField body="id" type="string">ID number</ParamField>
+      <ParamField body="id_type" type="string">ID type (V, J, E, P)</ParamField>
+      <ParamField body="phone" type="string">Phone number</ParamField>
+      <ParamField body="address" type="object">Address object</ParamField>
+    </ParamField>
+  </ParamField>
+  
+  <ParamField body="event_id" type="string" required>
+    Event identifier
+  </ParamField>
+  
+  <ParamField body="event_name" type="string" required>
+    Event name
+  </ParamField>
+  
+  <ParamField body="office_id" type="string" required>
+    Office/point of sale ID
+  </ParamField>
+  
+  <ParamField body="office_name" type="string" required>
+    Office/point of sale name
+  </ParamField>
+  
+  <ParamField body="exchange_rate" type="number" required>
+    USD to BSD exchange rate (from /data/exchange_rates)
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400/500 for errors)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="success" type="boolean">
+    Indicates if billing was successful
+  </ResponseField>
+  
+  <ResponseField name="order_id" type="string">
+    Processed order ID
+  </ResponseField>
+  
+  <ResponseField name="billing_result" type="object">
+    Result from external billing API
+    
+    <ResponseField name="mensaje" type="string">
+      Response message from billing system
+    </ResponseField>
+    
+    <ResponseField name="resultado" type="object">
+      <ResponseField name="numeroDocumento" type="string">
+        Invoice document number
+      </ResponseField>
+      <ResponseField name="urlConsulta" type="string">
+        URL to view/download invoice
+      </ResponseField>
+      <ResponseField name="codigoQR" type="string">
+        QR code for verification
+      </ResponseField>
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="error" type="object">
+    Error details (if success is false)
+    <ResponseField name="mensaje" type="string">Error message</ResponseField>
+    <ResponseField name="validaciones" type="array">Validation errors</ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Processing Flow
+
+1. **Retrieve purchaser information** from `u_users` collection if email is provided
+2. **Retrieve client (tercero) information** from `u_clients` collection
+3. **Obtain sequential invoice number** from `/data/invoice_counter` (atomic transaction)
+4. **Generate billing data** with:
+   - Ticket items grouped by zone
+   - Tax calculations (VAT 16%, IGTF 3% if applicable)
+   - Currency conversion (USD to BSD)
+   - Amount in words (Spanish)
+5. **Emit invoice** to external billing system
+6. **Update order** with billing information in Firestore
+
+## Tax Calculation Details
+
+### VAT (IVA) - 16%
+- Applied to all ticket sales
+- Calculated on subtotal
+- Rounded to 2 decimals
+
+### IGTF (Currency Tax) - 3%
+- Applied only when payment methods include:
+  - Zelle
+  - Efectivo Dolares (Cash Dollars)
+  - Efectivo Divisa (Foreign Cash)
+- Base: Total amount paid in foreign currency
+- Capped at invoice total (Subtotal + IVA)
+- Truncated to 2 decimals (not rounded)
+
+### Currency Conversion
+- Exchange rate from `/data/exchange_rates`
+- Individual components truncated to 2 decimals
+- Total = Sum of truncated components
+
+## Invoice Number Generation
+
+Invoice numbers are:
+- Sequential and atomic (using Firestore transaction)
+- Stored in `/data/invoice_counter`
+- 8-digit zero-padded format (e.g., "00000123")
+- Automatically incremented for each invoice
+
+## Firestore Updates
+
+On successful billing, the order document is updated with:
+```javascript
+{
+  "billing_info": {
+    "billed": true,
+    "billing_date": Timestamp,
+    "billing_result": { /* external API response */ }
+  }
+}
+```
+
+## Example Request
+
+```json
+{
+  "data": {
+    "order_id": "abc123xyz789",
+    "order_data": {
+      "amount": 100.00,
+      "event_id": "event_001",
+      "event_name": "Concert 2026",
+      "client_id": "client_123",
+      "client_name": "Entertainment Productions LLC",
+      "box_office_name": "Main Box Office",
+      "box_office_id": "box_001",
+      "tickets": [
+        {
+          "ticket_id": "event_001-ticket_001",
+          "amount": 50.00,
+          "zone": "VIP",
+          "metadata": {
+            "customer_email": "customer@example.com",
+            "customer_name": "Jane Smith",
+            "customer_id": "12345678",
+            "customer_phone": "+584121234567"
+          }
+        },
+        {
+          "ticket_id": "event_001-ticket_002",
+          "amount": 50.00,
+          "zone": "VIP",
+          "metadata": {
+            "customer_email": "customer@example.com",
+            "customer_name": "Jane Smith",
+            "customer_id": "12345678",
+            "customer_phone": "+584121234567"
+          }
+        }
+      ],
+      "transactions": [
+        {
+          "amount": 100.00,
+          "payment_name": "Zelle",
+          "payment_id": "pay_123",
+          "custody_account": {
+            "id": "acc_001",
+            "name": "Main Account",
+            "account_number": "1234567890"
+          }
+        }
+      ],
+      "purchaser_info": {
+        "email": "customer@example.com",
+        "name": "Jane Smith",
+        "id": "12345678",
+        "id_type": "V",
+        "phone": "+584121234567",
+        "address": {
+          "state": "Caracas",
+          "country": {
+            "code": "ve",
+            "name": "Venezuela"
+          }
+        }
+      },
+      "exchange_rate": 36.50
+    },
+    "event_id": "event_001",
+    "event_name": "Concert 2026",
+    "office_id": "box_001",
+    "office_name": "Main Box Office",
+    "exchange_rate": 36.50
+  }
+}
+```
+
+## Example Success Response
+
+```json
+{
+  "message": "Facturación completada exitosamente",
+  "status": 200,
+  "data": {
+    "success": true,
+    "order_id": "abc123xyz789",
+    "billing_result": {
+      "mensaje": "Documento emitido exitosamente",
+      "resultado": {
+        "numeroDocumento": "00000124",
+        "urlConsulta": "https://demoemisionv2.thefactoryhka.com.ve/consulta/00000124",
+        "codigoQR": "data:image/png;base64,..."
+      },
+      "validaciones": []
+    }
+  }
+}
+```
+
+## Example Error Response
+
+```json
+{
+  "message": "Error en facturación",
+  "status": 400,
+  "data": {
+    "success": false,
+    "order_id": "abc123xyz789",
+    "error": {
+      "mensaje": "Error en validación de documento",
+      "validaciones": [
+        {
+          "campo": "Comprador.NumeroIdentificacion",
+          "error": "Campo requerido"
+        }
+      ]
+    }
+  }
+}
+```
+
+## Error Codes
+
+- **200**: Success
+- **400**: Billing failed (validation errors, external API rejection)
+- **500**: Critical error (authentication failure, missing data, system error)

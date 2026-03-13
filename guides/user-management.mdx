@@ -1,0 +1,560 @@
+---
+title: 'User Management'
+description: 'Learn how to create and manage clients, collaborators, staff, and validate users in the TMT API'
+icon: 'users'
+---
+
+The TMT API provides comprehensive user management capabilities for creating clients, collaborators, staff members, and end users. This guide covers user creation, validation, and management operations.
+
+## User Types
+
+The TMT system manages different types of users:
+
+- **Clients** (`u_clients`): Organizations that host events
+- **Collaborators** (`u_collaborators`): Staff members working for clients
+- **App Users** (`u_users`): End users who purchase tickets
+- **Staff**: Administrative and support personnel
+
+## Creating Clients
+
+Clients are organizations that create and manage events. Use the `create_client` endpoint to register a new client.
+
+<Steps>
+  <Step title="Prepare Client Data">
+    Gather all required information including business details, contact information, and banking details.
+  </Step>
+  
+  <Step title="Submit Client Creation Request">
+    Send a POST request to create the client account.
+  </Step>
+  
+  <Step title="Verify Account Creation">
+    Check the response for the generated UID and confirm account status.
+  </Step>
+</Steps>
+
+### Request Example
+
+<CodeGroup>
+```javascript Node.js
+const axios = require('axios');
+
+const clientData = {
+  data: {
+    name: "Acme Entertainment Inc.",
+    email: "contact@acmeentertainment.com",
+    password: "SecurePassword123!",
+    name_commercial: "Acme Entertainment",
+    phone: "+58424123456",
+    status: true,
+    id: "J123456789",
+    id_type: "J",
+    city: "Caracas",
+    country: "Venezuela",
+    line: "Av. Principal, Centro Empresarial",
+    zip_code: "1060",
+    account_type: "business",
+    commercial_registry: "12345",
+    last_assembly_minutes: "2024-01-15",
+    fiscal_info: {
+      tax_id: "J123456789",
+      tax_regime: "regular"
+    },
+    commercial_license: "LC-2024-001",
+    taxpayer_type: "ordinary",
+    legal_representative: {
+      name: "John Doe",
+      id: "V12345678",
+      position: "CEO"
+    },
+    contact_person: {
+      name: "Jane Smith",
+      email: "jane@acmeentertainment.com",
+      phone: "+58424987654"
+    },
+    bank_accounts: [
+      {
+        bank_name: "Banco Nacional",
+        account_number: "01020123456789",
+        account_type: "checking"
+      }
+    ]
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/create_client',
+  clientData
+);
+
+console.log('Client created:', response.data);
+```
+
+```python Python
+import requests
+
+client_data = {
+    "data": {
+        "name": "Acme Entertainment Inc.",
+        "email": "contact@acmeentertainment.com",
+        "password": "SecurePassword123!",
+        "name_commercial": "Acme Entertainment",
+        "phone": "+58424123456",
+        "status": True,
+        "id": "J123456789",
+        "id_type": "J",
+        "city": "Caracas",
+        "country": "Venezuela",
+        "line": "Av. Principal, Centro Empresarial",
+        "zip_code": "1060",
+        "account_type": "business",
+        "commercial_registry": "12345",
+        "taxpayer_type": "ordinary"
+    }
+}
+
+response = requests.post(
+    'https://your-api-url/create_client',
+    json=client_data
+)
+
+print('Client created:', response.json())
+```
+
+```curl cURL
+curl -X POST https://your-api-url/create_client \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "Acme Entertainment Inc.",
+      "email": "contact@acmeentertainment.com",
+      "password": "SecurePassword123!",
+      "name_commercial": "Acme Entertainment",
+      "phone": "+58424123456",
+      "status": true,
+      "id": "J123456789",
+      "id_type": "J",
+      "account_type": "business"
+    }
+  }'
+```
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "message": "Ingresado con el ID: abc123xyz456.",
+  "status": 200,
+  "data": {
+    "uid": "abc123xyz456"
+  }
+}
+```
+
+<Tip>
+The UID returned in the response is the unique identifier for the client. Store this value securely as it's required for all future operations related to this client.
+</Tip>
+
+## Creating Collaborators
+
+Collaborators are staff members who work for clients and manage events, access control, and other operations.
+
+### Request Example
+
+<CodeGroup>
+```javascript Node.js
+const collaboratorData = {
+  data: {
+    name: "Carlos Rodriguez",
+    email: "carlos@acmeentertainment.com",
+    password: "SecurePass456!",
+    phone: "+58426123456",
+    status: true,
+    account_type: "collaborator",
+    client: {
+      id: "abc123xyz456",
+      name: "Acme Entertainment"
+    },
+    id: "V23456789",
+    id_type: "V",
+    city: "Caracas",
+    country: "Venezuela",
+    line: "Calle 5, Edificio B",
+    zip_code: "1060"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/create_collaborator',
+  collaboratorData
+);
+```
+
+```python Python
+collaborator_data = {
+    "data": {
+        "name": "Carlos Rodriguez",
+        "email": "carlos@acmeentertainment.com",
+        "password": "SecurePass456!",
+        "phone": "+58426123456",
+        "status": True,
+        "account_type": "collaborator",
+        "client": {
+            "id": "abc123xyz456",
+            "name": "Acme Entertainment"
+        },
+        "id": "V23456789",
+        "id_type": "V"
+    }
+}
+
+response = requests.post(
+    'https://your-api-url/create_collaborator',
+    json=collaborator_data
+)
+```
+</CodeGroup>
+
+<Warning>
+Collaborators must be associated with a valid client. Ensure the client ID exists before creating collaborators.
+</Warning>
+
+## App User Management
+
+App users are end customers who purchase tickets through the platform. They can be created automatically during the order process or manually.
+
+### Validate App User
+
+Validate a user's security code:
+
+```javascript
+const validateUser = {
+  data: {
+    email: "customer@example.com",
+    security_cod: "123456"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/app_user_validate',
+  validateUser
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Codigo Valido",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+## List User Orders
+
+Retrieve all orders for a specific user:
+
+<CodeGroup>
+```javascript All Orders
+const response = await axios.post(
+  'https://your-api-url/app_list_orders',
+  {
+    data: {
+      userd_id: "user-uid-here"
+    }
+  }
+);
+```
+
+```javascript Event-Specific Orders
+const response = await axios.post(
+  'https://your-api-url/app_list_orders_events',
+  {
+    data: {
+      userd_id: "user-uid-here",
+      event_id: "event-id-here"
+    }
+  }
+);
+```
+</CodeGroup>
+
+### Response Structure
+
+```json
+{
+  "message": "Ordenes encontradas",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "ordenes": [
+      {
+        "order_id": "order123",
+        "amount": 150.00,
+        "client_id": "client456",
+        "client_name": "Acme Entertainment",
+        "date_created": "2024-03-10T10:30:00Z",
+        "date_updated": "2024-03-10T10:35:00Z",
+        "event_id": "event789",
+        "event_name": "Rock Concert 2024",
+        "office_id": "office001",
+        "office_name": "Online Store",
+        "status": true,
+        "tickets": [
+          {
+            "ticket_id": "event789-ticket001",
+            "amount": 75.00
+          }
+        ],
+        "transactions": [
+          {
+            "payment_id": "stripe_123",
+            "amount": 150.00,
+            "status": true
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## List User Tickets
+
+Retrieve tickets owned by a user:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/app_list_tickets',
+  {
+    data: {
+      userd_id: "user-uid-here"
+    }
+  }
+);
+```
+
+### Ticket Response
+
+```json
+{
+  "message": "Tickets encontrados",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": [
+      {
+        "ticket_id": "event789-ticket001",
+        "color": "#FF5733",
+        "customer_email": "customer@example.com",
+        "customer_id": "V12345678",
+        "customer_name": "John Doe",
+        "customer_phone": "+58424123456",
+        "date_created": "2024-03-10T10:30:00Z",
+        "date_start": "2024-04-15T19:00:00Z",
+        "date_end": "2024-04-15T23:00:00Z",
+        "event_id": "event789",
+        "event_name": "Rock Concert 2024",
+        "zone": "VIP",
+        "seat_id": "vip-1",
+        "seat_row": "A",
+        "status": true,
+        "transferred": false,
+        "ledger": [
+          {
+            "date": "2024-03-10T10:30:00Z",
+            "action": "generated",
+            "metadata": "{}"
+          },
+          {
+            "date": "2024-03-10T10:35:00Z",
+            "action": "sold",
+            "metadata": "{}"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Ticket Transfer
+
+Transfer tickets between users:
+
+<Steps>
+  <Step title="Validate Recipient">
+    Ensure the recipient email is registered and validated.
+  </Step>
+  
+  <Step title="Initiate Transfer">
+    Submit the transfer request with ticket ID and recipient email.
+  </Step>
+  
+  <Step title="Update Ledger">
+    The system automatically updates the ticket ledger with transfer information.
+  </Step>
+</Steps>
+
+### Online Transfer
+
+```javascript
+const transferRequest = {
+  data: {
+    email: "recipient@example.com",
+    ticket_id: "event789-ticket001",
+    email_from: "sender@example.com"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/app_transfer_tickets',
+  transferRequest
+);
+```
+
+### Offline Transfer
+
+For transfers made offline and synced later:
+
+```javascript
+const offlineTransfer = {
+  data: {
+    email: "recipient@example.com",
+    ticket_id: "event789-ticket001",
+    email_from: "sender@example.com"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/app_transfer_tickets_offline',
+  offlineTransfer
+);
+```
+
+<Warning>
+Ticket transfers require:
+- Recipient must have a validated account
+- Ticket must not have been previously transferred
+- Original owner must initiate the transfer
+</Warning>
+
+## List User Events
+
+Get all events a user has tickets for:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/app_list_events',
+  {
+    data: {
+      userd_id: "user-uid-here"
+    }
+  }
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Eventos encontrados",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "eventos": [
+      {
+        "event_id": "event789",
+        "event_name": "Rock Concert 2024",
+        "client_id": "client456",
+        "client_name": "Acme Entertainment",
+        "event": {
+          "name": "Rock Concert 2024",
+          "description": "Annual rock music festival",
+          "date_start": "2024-04-15T19:00:00Z"
+        },
+        "status": "Activo",
+        "type": "concert",
+        "type_metadata": {
+          "genre": "rock",
+          "artists": ["Band A", "Band B"]
+        }
+      }
+    ]
+  }
+}
+```
+
+## Error Handling
+
+### Common Error Responses
+
+<CodeGroup>
+```json User Not Found
+{
+  "message": "Email no registrado",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Email no registrado"
+  }
+}
+```
+
+```json Email Not Validated
+{
+  "message": "Email no validado",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Email no validado"
+  }
+}
+```
+
+```json Invalid Security Code
+{
+  "message": "Codigo No valido",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</CodeGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Secure Passwords" icon="lock">
+    Always use strong passwords with minimum 8 characters including uppercase, lowercase, numbers, and special characters.
+  </Card>
+  
+  <Card title="Validate Users" icon="check">
+    Implement email validation to ensure users can receive important notifications and ticket information.
+  </Card>
+  
+  <Card title="Store UIDs Safely" icon="database">
+    Keep user UIDs secure and never expose them in client-side code or public URLs.
+  </Card>
+  
+  <Card title="Handle Errors Gracefully" icon="triangle-exclamation">
+    Always check response status codes and handle errors appropriately in your application.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Event Setup" icon="calendar" href="/guides/event-setup">
+    Learn how to create and configure events
+  </Card>
+  
+  <Card title="Ticket Generation" icon="ticket" href="/guides/ticket-generation">
+    Generate tickets for your events
+  </Card>
+</CardGroup>

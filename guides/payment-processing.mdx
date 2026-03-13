@@ -1,0 +1,702 @@
+---
+title: 'Payment Processing'
+description: 'Integrate Stripe, Mercantil, and Banco de Venezuela payment gateways for ticket purchases'
+icon: 'credit-card'
+---
+
+TMT API supports multiple payment processors to accommodate different markets and customer preferences. This guide covers integrating Stripe (international), Mercantil (Venezuelan banking), and Banco de Venezuela payment methods.
+
+## Supported Payment Methods
+
+The TMT platform supports:
+
+- **Stripe**: Credit/debit cards, international payments
+- **Mercantil**: TDD (debit cards), TDC (credit cards), C2P (mobile payments)
+- **Banco de Venezuela**: Mobile payments (Pago Móvil)
+
+## Payment Flow
+
+<Steps>
+  <Step title="Lock Tickets">
+    Reserve tickets during checkout to prevent double-booking.
+  </Step>
+  
+  <Step title="Create Payment Intent">
+    Initialize payment with chosen processor.
+  </Step>
+  
+  <Step title="Process Payment">
+    Complete payment through gateway.
+  </Step>
+  
+  <Step title="Create Order">
+    On successful payment, create order and assign tickets.
+  </Step>
+  
+  <Step title="Release Locks">
+    Unlock tickets (automatic on order creation).
+  </Step>
+</Steps>
+
+## Stripe Integration
+
+Stripe is the recommended payment processor for international customers and credit card payments.
+
+### Create Payment Intent
+
+Initialize a Stripe payment:
+
+```javascript
+const createPaymentIntent = {
+  data: {
+    amount: 150.00,  // Amount in USD
+    currency: "usd",
+    description: "Summer Music Festival 2024 - 2 VIP Tickets",
+    metadata: {
+      event_id: "evt_2024_concert_001",
+      customer_email: "customer@example.com",
+      ticket_count: 2
+    }
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/stripe_create_payment_intent',
+  createPaymentIntent
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "client_secret": "pi_3AbCdEfGhIjKlMnO_secret_1234567890",
+    "payment_intent_id": "pi_3AbCdEfGhIjKlMnO"
+  }
+}
+```
+
+<Tip>
+Store the `payment_intent_id` in your session. You'll need it to confirm the payment and retrieve payment details.
+</Tip>
+
+### Complete Payment (Client-Side)
+
+Use Stripe.js on the frontend to complete the payment:
+
+<CodeGroup>
+```javascript React
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe('pk_live_your_publishable_key');
+
+function CheckoutForm({ clientSecret }) {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!stripe || !elements) return;
+
+    const result = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: 'https://yoursite.com/payment-complete',
+      },
+    });
+
+    if (result.error) {
+      console.error(result.error.message);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <PaymentElement />
+      <button disabled={!stripe}>Pay Now</button>
+    </form>
+  );
+}
+
+function App({ clientSecret }) {
+  return (
+    <Elements stripe={stripePromise} options={{ clientSecret }}>
+      <CheckoutForm clientSecret={clientSecret} />
+    </Elements>
+  );
+}
+```
+
+```javascript Vanilla JavaScript
+const stripe = Stripe('pk_live_your_publishable_key');
+
+const elements = stripe.elements({
+  clientSecret: 'pi_3AbCdEfGhIjKlMnO_secret_1234567890'
+});
+
+const paymentElement = elements.create('payment');
+paymentElement.mount('#payment-element');
+
+document.getElementById('payment-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const { error } = await stripe.confirmPayment({
+    elements,
+    confirmParams: {
+      return_url: 'https://yoursite.com/payment-complete',
+    },
+  });
+  
+  if (error) {
+    alert(error.message);
+  }
+});
+```
+</CodeGroup>
+
+### Confirm Payment (Server-Side)
+
+After payment completes, verify the status:
+
+```javascript
+const confirmPayment = {
+  data: {
+    payment_intent_id: "pi_3AbCdEfGhIjKlMnO"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/stripe_confirm_payment',
+  confirmPayment
+);
+```
+
+### Success Response
+
+```json
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "payment_intent": {
+      "id": "pi_3AbCdEfGhIjKlMnO",
+      "status": "succeeded",
+      "amount": 150.00,
+      "currency": "usd",
+      "created": 1647532800,
+      "payment_method": "pm_1AbCdEfGhIjKlMnO",
+      "charges": [
+        {
+          "id": "ch_3AbCdEfGhIjKlMnO",
+          "amount": 150.00,
+          "status": "succeeded"
+        }
+      ]
+    }
+  }
+}
+```
+
+### Retrieve Payment Intent
+
+Get details about a payment intent:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/stripe_get_payment_intent',
+  {
+    data: {
+      payment_intent_id: "pi_3AbCdEfGhIjKlMnO"
+    }
+  }
+);
+```
+
+<Warning>
+Always verify payment status on your server before creating orders. Never trust client-side confirmation alone.
+</Warning>
+
+## Mercantil Integration
+
+Mercantil is a Venezuelan bank that supports multiple payment methods including debit cards (TDD), credit cards (TDC), and mobile payments (C2P).
+
+### TDD (Debit Card) Payment
+
+Process debit card payments:
+
+#### Request Authorization
+
+First, request authorization from the user:
+
+```javascript
+const authRequest = {
+  data: {
+    customer_id: "V12345678",
+    card_number: "501878200066287386",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/api_mercantil_auth',
+  authRequest
+);
+```
+
+#### Process Payment
+
+After receiving authorization code, process the payment:
+
+```javascript
+const tddPayment = {
+  data: {
+    amount: 1500.00,  // Amount in VES
+    invoice_number: "INV-2024-001",
+    customer_id: "V12345678",
+    card_number: "501878200066287386",
+    cvv: "752",
+    account_type: "cc",  // cc = current account, ca = savings
+    expiration_date: "2026/11",
+    twofactor_auth: "11111111",  // Authorization code from user
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/api_mercantil_tdd_pay',
+  tddPayment
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Procesado",
+  "data": {
+    "transaction_id": "TXN123456789",
+    "status": "approved",
+    "amount": 1500.00,
+    "currency": "VES",
+    "authorization_code": "AUTH789456",
+    "timestamp": "2024-03-11T14:30:00Z"
+  }
+}
+```
+
+### TDC (Credit Card) Payment
+
+Process credit card payments (similar to TDD but without two-factor auth for some cards):
+
+```javascript
+const tdcPayment = {
+  data: {
+    amount: 2500.00,
+    invoice_number: "INV-2024-002",
+    customer_id: "V12345678",
+    card_number: "4111111111111111",
+    cvv: "123",
+    expiration_date: "2025/12",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/api_mercantil_tdc_pay',
+  tdcPayment
+);
+```
+
+### C2P (Mobile Payment)
+
+Process mobile payments (Pago Móvil):
+
+<Steps>
+  <Step title="Request Authorization">
+    Request authorization code from the mobile payment system.
+  </Step>
+  
+  <Step title="User Approves">
+    User approves transaction in their banking app.
+  </Step>
+  
+  <Step title="Submit Payment">
+    Complete payment with authorization code.
+  </Step>
+</Steps>
+
+#### Request Authorization
+
+```javascript
+const c2pAuth = {
+  data: {
+    destination_id: "V18367443",
+    destination_mobile_number: "584241513063",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/api_mercantil_c2p_auth',
+  c2pAuth
+);
+```
+
+#### Process Payment
+
+```javascript
+const c2pPayment = {
+  data: {
+    amount: 1800.00,
+    invoice_number: "INV-2024-003",
+    destination_bank_id: "0105",  // Mercantil bank code
+    destination_id: "V18367443",
+    destination_mobile_number: "584241513063",
+    origin_mobile_number: "584126935529",
+    payment_reference: "REF123",
+    twofactor_auth: "00001111",
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/api_mercantil_c2p_pay',
+  c2pPayment
+);
+```
+
+### Search C2P Transaction
+
+Search for a mobile payment transaction:
+
+```javascript
+const searchPayment = {
+  data: {
+    destination_mobile_number: "584241513063",
+    origin_mobile_number: "584126935529",
+    payment_reference: "REF123",
+    date_pay: "2024-03-11",
+    amount: 1800.00,
+    ipaddress: "192.168.1.100"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/api_mercantil_c2p_search',
+  searchPayment
+);
+```
+
+<Tip>
+All sensitive data (CVV, authorization codes, phone numbers) are automatically encrypted before transmission using AES-256 encryption.
+</Tip>
+
+## Banco de Venezuela Integration
+
+Banco de Venezuela supports mobile payment verification:
+
+### Verify Mobile Payment
+
+```javascript
+const bdvPayment = {
+  data: {
+    cedulaPagador: "V12345678",
+    telefonoPagador: "04241234567",
+    telefonoDestino: "04149876543",
+    referencia: "123456",
+    fechaPago: "2024-03-11",
+    importe: 1500.00,
+    bancoOrigen: "0102"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/mobile_payment_bcv',
+  bdvPayment
+);
+```
+
+### Conciliation (Movement Query)
+
+Query account movements for reconciliation:
+
+```javascript
+const conciliation = {
+  data: {
+    cuenta: "01020123456789012345",
+    fechaIni: "2024-03-01",
+    fechaFin: "2024-03-11",
+    tipoMoneda: "VES",
+    nroMovimiento: ""
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/conciliation_bcv',
+  conciliation
+);
+```
+
+## Creating Orders After Payment
+
+Once payment is confirmed, create an order to finalize the ticket purchase:
+
+```javascript
+const orderData = {
+  data: {
+    amount: 150.00,
+    event_id: "evt_2024_concert_001",
+    event_name: "Summer Music Festival 2024",
+    office_id: "office_online",
+    office_name: "Online Store",
+    status: true,
+    client_id: "client_abc123",
+    client_name: "Acme Entertainment",
+    exchange_rate: 36.50,
+    box_office_name: "Web",
+    box_office_id: "web_001",
+    tickets: [
+      {
+        ticket_id: "evt_2024_concert_001-abc123xyz",
+        amount: 75.00,
+        status: false,
+        id: "ticket1",
+        metadata: {
+          customer_email: "customer@example.com",
+          customer_name: "John Doe",
+          customer_phone: "+58424123456",
+          customer_id: "V12345678",
+          customer_id_type: "V",
+          customer_address: "Caracas, Venezuela",
+          customer_country: {
+            code: "ve",
+            name: "Venezuela",
+            key: 0
+          }
+        }
+      }
+    ],
+    transactions: [
+      {
+        amount: 150.00,
+        custody_account: {
+          id: "custody_001",
+          name: "Main Account",
+          account_number: "01020123456789"
+        },
+        payment_data: "pi_3AbCdEfGhIjKlMnO",
+        payment_id: "stripe",
+        payment_name: "Stripe Credit Card",
+        status: true,
+        amount_currency: "USD",
+        amount_exchange: 150.00,
+        amount_exchange_rate: 1.0,
+        point_sale_tmt: false
+      }
+    ],
+    purchaser_info: {
+      email: "customer@example.com",
+      name: "John Doe",
+      phone: "+58424123456",
+      id: "V12345678"
+    },
+    is_courtesy: false,
+    is_corporate: false,
+    is_gift: false
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/order_created',
+  orderData
+);
+```
+
+### Order Response
+
+```json
+{
+  "message": "Orden Creada",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "order": "order_xyz789abc"
+  }
+}
+```
+
+<Warning>
+Order creation automatically:
+- Assigns tickets to customers
+- Updates ticket status to sold
+- Creates transaction records
+- Removes ticket locks
+- Splits revenue according to financial configuration
+- Creates user accounts if they don't exist
+</Warning>
+
+## Payment Processing Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Validate Before Processing" icon="shield-check">
+    Always verify ticket availability before initiating payment.
+  </Card>
+  
+  <Card title="Handle Failures Gracefully" icon="circle-exclamation">
+    Unlock tickets and clear cart if payment fails.
+  </Card>
+  
+  <Card title="Use Webhooks" icon="webhook">
+    Implement Stripe webhooks for async payment notifications.
+  </Card>
+  
+  <Card title="Secure Sensitive Data" icon="lock">
+    Never log or store full card numbers or CVV codes.
+  </Card>
+</CardGroup>
+
+## Complete Payment Flow Example
+
+```javascript
+const processTicketPurchase = async (tickets, customerInfo) => {
+  try {
+    // 1. Lock tickets
+    const lockResponse = await axios.post(
+      'https://your-api-url/tickets_lock',
+      {
+        data: {
+          ticketd_reserved: tickets.map(t => t.ticket_id),
+          reserved_time: 900
+        }
+      }
+    );
+    
+    if (lockResponse.data.status !== 200) {
+      throw new Error('Tickets not available');
+    }
+    
+    // 2. Calculate total amount
+    const totalAmount = tickets.reduce((sum, t) => sum + t.price, 0);
+    
+    // 3. Create payment intent
+    const paymentIntent = await axios.post(
+      'https://your-api-url/stripe_create_payment_intent',
+      {
+        data: {
+          amount: totalAmount,
+          currency: 'usd',
+          metadata: {
+            event_id: tickets[0].event_id,
+            customer_email: customerInfo.email
+          }
+        }
+      }
+    );
+    
+    // 4. Process payment (client-side with Stripe.js)
+    // ... Stripe payment flow ...
+    
+    // 5. Confirm payment
+    const confirmation = await axios.post(
+      'https://your-api-url/stripe_confirm_payment',
+      {
+        data: {
+          payment_intent_id: paymentIntent.data.data.payment_intent_id
+        }
+      }
+    );
+    
+    if (confirmation.data.data.payment_intent.status !== 'succeeded') {
+      throw new Error('Payment failed');
+    }
+    
+    // 6. Create order
+    const order = await axios.post(
+      'https://your-api-url/order_created',
+      {
+        data: {
+          amount: totalAmount,
+          tickets: tickets,
+          transactions: [{
+            amount: totalAmount,
+            payment_id: 'stripe',
+            payment_data: paymentIntent.data.data.payment_intent_id,
+            status: true
+          }],
+          // ... other order data
+        }
+      }
+    );
+    
+    return {
+      success: true,
+      order_id: order.data.data.order
+    };
+    
+  } catch (error) {
+    // Unlock tickets on error
+    await axios.post(
+      'https://your-api-url/tickets_unlock_param',
+      {
+        data: {
+          ticketd_reserved: tickets.map(t => t.ticket_id)
+        }
+      }
+    );
+    
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+```
+
+## Error Handling
+
+<CodeGroup>
+```json Payment Declined
+{
+  "message": "Error en el Proceso",
+  "status": 400,
+  "error": "Payment declined - insufficient funds"
+}
+```
+
+```json Invalid Payment Method
+{
+  "message": "Error en el Proceso",
+  "status": 500,
+  "error": "Invalid payment method"
+}
+```
+
+```json Authentication Failed
+{
+  "message": "Error",
+  "error": {
+    "code": "authentication_failed",
+    "message": "Two-factor authentication code invalid"
+  }
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Access Control" icon="door-open" href="/guides/access-control">
+    Implement ticket scanning and validation
+  </Card>
+  
+  <Card title="User Management" icon="users" href="/guides/user-management">
+    Manage customer accounts and profiles
+  </Card>
+</CardGroup>

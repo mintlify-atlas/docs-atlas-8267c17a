@@ -1,0 +1,118 @@
+---
+title: 'Create Event'
+api: 'POST /create_event_seatsio'
+description: 'Create a new event in Seats.io integrated with TMT'
+---
+
+## Overview
+
+This endpoint creates a new event in Seats.io using a specified chart (venue layout). The event is created with a unique key, name, and date, allowing you to manage seat bookings and availability for the event.
+
+## Request
+
+<ParamField body="chart_id" type="string" required>
+  The unique identifier of the chart (venue layout) in Seats.io. This defines the seating arrangement for the event.
+</ParamField>
+
+<ParamField body="event_id" type="string" required>
+  A unique identifier for the event. This will be used as the event key in Seats.io and should match your internal event ID.
+</ParamField>
+
+<ParamField body="name_event" type="string" required>
+  The display name of the event. This will be visible in Seats.io and can be used for identification purposes.
+</ParamField>
+
+<ParamField body="date_event" type="string" required>
+  The date and time of the event. Format should be ISO 8601 compatible (e.g., "2026-12-31T20:00:00").
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Status message indicating the result of the operation.
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code. Returns `200` on success, `500` on error.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Contains the created event details.
+  
+  <ResponseField name="event" type="object">
+    The complete event object returned by Seats.io, including:
+    - `id`: The event's unique identifier
+    - `key`: Your custom event key (event_id)
+    - `chartKey`: The chart identifier
+    - `name`: The event name
+    - `date`: The event date
+    - `createdOn`: Timestamp of creation
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```json
+{
+  "data": {
+    "chart_id": "4c7e5e7c-9f3d-4b5a-8e2f-1a2b3c4d5e6f",
+    "event_id": "concert-2026-12-31",
+    "name_event": "New Year's Eve Concert 2026",
+    "date_event": "2026-12-31T20:00:00"
+  }
+}
+```
+
+## Example Response
+
+```json
+{
+  "message": "Evento Creado en Seatsio",
+  "status": 200,
+  "data": {
+    "event": {
+      "id": 123456,
+      "key": "concert-2026-12-31",
+      "chartKey": "4c7e5e7c-9f3d-4b5a-8e2f-1a2b3c4d5e6f",
+      "name": "New Year's Eve Concert 2026",
+      "date": "2026-12-31T20:00:00",
+      "createdOn": "2026-03-13T10:30:00Z",
+      "supportsBestAvailable": true,
+      "forSaleConfig": null
+    }
+  }
+}
+```
+
+## Implementation Details
+
+- Uses Seats.io Node.js SDK with South America region (`Region.SA()`)
+- Connects using development environment credentials (`seatsio_dev`)
+- All requests are CORS-enabled for cross-origin access
+- Event creation uses `CreateEventParams` for parameter handling
+
+## Error Handling
+
+If the event creation fails, the endpoint returns a 500 status code with error details:
+
+```json
+{
+  "message": "Error message",
+  "code": "CHART_NOT_FOUND"
+}
+```
+
+Common error scenarios:
+- Invalid or non-existent `chart_id`
+- Duplicate `event_id` (event key already exists)
+- Authentication failure with Seats.io
+- Invalid date format
+
+## Related Endpoints
+
+- [Manage Charts](/api/seatsio/manage-charts) - Manage venue layouts
+- [Hold & Release Seats](/api/seatsio/hold-release-seats) - Manage seat reservations
+
+## Source Reference
+
+Implementation: `/home/daytona/workspace/source/functions/seatsio/seatsio.js:44`

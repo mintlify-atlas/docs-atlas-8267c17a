@@ -1,0 +1,528 @@
+---
+title: 'Mercantil Banco'
+description: 'Process payments with Venezuelan Mercantil Banco payment methods'
+---
+
+## Overview
+
+The Mercantil Banco integration provides support for Venezuelan payment methods including debit cards (TDD), credit cards (TDC), and C2P (Card to Phone) mobile payments. All transactions are processed in Venezuelan Bolivares (VES).
+
+<Warning>
+  **Security Notice**: Sensitive data (CVV, OTP codes, phone numbers) are encrypted using AES256 encryption. Never send unencrypted sensitive data.
+</Warning>
+
+## Authentication
+
+**Required Headers:**
+- `X-IBM-Client-ID`: Your IBM API Gateway client ID
+- `Content-Type: application/json`
+
+**Merchant Identification:**
+All requests require merchant identification with:
+- `integratorId`: 31 (production) or 1 (sandbox)
+- `merchantId`: Your assigned merchant ID
+- `terminalId`: Terminal identifier
+
+---
+
+## Payment Methods
+
+<Tabs>
+  <Tab title="TDD (Debit Card)">
+    Process payments using Venezuelan debit cards with two-factor authentication.
+
+    ### Get Authorization Code
+
+    Request a two-factor authentication code for debit card payments.
+
+    **Endpoint:** `POST /api_mercantil_auth`
+
+    **Parameters:**
+
+    <ParamField body="customer_id" type="string" required>
+      Customer ID number (e.g., "V18366876")
+    </ParamField>
+
+    <ParamField body="card_number" type="string" required>
+      16-digit card number
+    </ParamField>
+
+    <ParamField body="ipaddress" type="string" required>
+      Customer's IP address
+    </ParamField>
+
+    **Request Example:**
+    ```json
+    {
+      "data": {
+        "customer_id": "V18366876",
+        "card_number": "5018782000662873",
+        "ipaddress": "192.168.1.100"
+      }
+    }
+    ```
+
+    **Response:**
+    ```json
+    {
+      "data": {
+        "auth_code": "sent",
+        "message": "SMS code sent to registered phone"
+      },
+      "status": 200
+    }
+    ```
+
+    ---
+
+    ### Process TDD Payment
+
+    Complete a debit card payment with two-factor authentication.
+
+    **Endpoint:** `POST /api_mercantil_tdd_pay`
+
+    **Parameters:**
+
+    <ParamField body="amount" type="number" required>
+      Payment amount in VES
+    </ParamField>
+
+    <ParamField body="invoice_number" type="string" required>
+      Unique invoice identifier
+    </ParamField>
+
+    <ParamField body="customer_id" type="string" required>
+      Customer ID (e.g., "V18366876")
+    </ParamField>
+
+    <ParamField body="card_number" type="string" required>
+      16-digit card number
+    </ParamField>
+
+    <ParamField body="cvv" type="string" required>
+      Card CVV (will be encrypted)
+    </ParamField>
+
+    <ParamField body="account_type" type="string" required>
+      Account type: "cc" (checking) or "ca" (savings)
+    </ParamField>
+
+    <ParamField body="expiration_date" type="string" required>
+      Card expiration in format "YYYY/MM"
+    </ParamField>
+
+    <ParamField body="twofactor_auth" type="string" required>
+      OTP code received via SMS (will be encrypted)
+    </ParamField>
+
+    <ParamField body="ipaddress" type="string" required>
+      Customer's IP address
+    </ParamField>
+
+    **Request Example:**
+    ```json
+    {
+      "data": {
+        "amount": 150.50,
+        "invoice_number": "INV-98765",
+        "customer_id": "V18366876",
+        "card_number": "5018782000662873",
+        "cvv": "123",
+        "account_type": "cc",
+        "expiration_date": "2026/12",
+        "twofactor_auth": "123456",
+        "ipaddress": "192.168.1.100"
+      }
+    }
+    ```
+
+    **Success Response:**
+    ```json
+    {
+      "message": "Procesado",
+      "data": {
+        "transaction_id": "TRX-123456789",
+        "status": "approved",
+        "authorization_code": "ABC123",
+        "amount": 150.50,
+        "currency": "ves"
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="TDC (Credit Card)">
+    Process credit card payments with CVV verification.
+
+    **Endpoint:** `POST /api_mercantil_tdc_pay`
+
+    **Parameters:**
+
+    <ParamField body="amount" type="number" required>
+      Payment amount in VES
+    </ParamField>
+
+    <ParamField body="invoice_number" type="string" required>
+      Unique invoice identifier
+    </ParamField>
+
+    <ParamField body="customer_id" type="string" required>
+      Customer ID (e.g., "V18366876")
+    </ParamField>
+
+    <ParamField body="card_number" type="string" required>
+      16-digit credit card number
+    </ParamField>
+
+    <ParamField body="cvv" type="string" required>
+      Card CVV (will be encrypted)
+    </ParamField>
+
+    <ParamField body="expiration_date" type="string" required>
+      Card expiration in format "YYYY/MM"
+    </ParamField>
+
+    <ParamField body="ipaddress" type="string" required>
+      Customer's IP address
+    </ParamField>
+
+    **Request Example:**
+    ```json
+    {
+      "data": {
+        "amount": 250.00,
+        "invoice_number": "INV-98766",
+        "customer_id": "V18366876",
+        "card_number": "5018782000662873",
+        "cvv": "456",
+        "expiration_date": "2026/12",
+        "ipaddress": "192.168.1.100"
+      }
+    }
+    ```
+
+    **Success Response:**
+    ```json
+    {
+      "message": "Procesado",
+      "data": {
+        "transaction_id": "TRX-123456790",
+        "status": "approved",
+        "authorization_code": "XYZ789",
+        "amount": 250.00,
+        "currency": "ves"
+      }
+    }
+    ```
+
+    <Warning>
+      **Credit Card Notes**:
+      - No two-factor authentication required for credit cards
+      - CVV is mandatory and encrypted before transmission
+      - Transactions are processed in real-time
+    </Warning>
+  </Tab>
+
+  <Tab title="C2P (Mobile Payment)">
+    Process Card-to-Phone (C2P) mobile payments between bank accounts.
+
+    ### Get C2P Authorization
+
+    Verify destination account and request OTP for C2P payment.
+
+    **Endpoint:** `POST /api_mercantil_c2p_auth`
+
+    **Parameters:**
+
+    <ParamField body="destination_id" type="string" required>
+      Recipient's ID (will be encrypted)
+    </ParamField>
+
+    <ParamField body="destination_mobile_number" type="string" required>
+      Recipient's phone number with country code (will be encrypted)
+    </ParamField>
+
+    <ParamField body="ipaddress" type="string" required>
+      Customer's IP address
+    </ParamField>
+
+    **Request Example:**
+    ```json
+    {
+      "data": {
+        "destination_id": "V18367443",
+        "destination_mobile_number": "584241513063",
+        "ipaddress": "192.168.1.100"
+      }
+    }
+    ```
+
+    ---
+
+    ### Process C2P Payment
+
+    Complete a mobile payment with two-factor authentication.
+
+    **Endpoint:** `POST /api_mercantil_c2p_pay`
+
+    **Parameters:**
+
+    <ParamField body="amount" type="number" required>
+      Payment amount in VES
+    </ParamField>
+
+    <ParamField body="invoice_number" type="string" required>
+      Unique invoice identifier
+    </ParamField>
+
+    <ParamField body="destination_bank_id" type="string" required>
+      Recipient bank code (e.g., "0102" for Banco de Venezuela)
+    </ParamField>
+
+    <ParamField body="destination_id" type="string" required>
+      Recipient's ID (will be encrypted)
+    </ParamField>
+
+    <ParamField body="destination_mobile_number" type="string" required>
+      Recipient's phone number (will be encrypted)
+    </ParamField>
+
+    <ParamField body="origin_mobile_number" type="string" required>
+      Sender's phone number (will be encrypted)
+    </ParamField>
+
+    <ParamField body="payment_reference" type="string" required>
+      Payment reference number
+    </ParamField>
+
+    <ParamField body="twofactor_auth" type="string" required>
+      OTP code (will be encrypted)
+    </ParamField>
+
+    <ParamField body="ipaddress" type="string" required>
+      Customer's IP address
+    </ParamField>
+
+    **Request Example:**
+    ```json
+    {
+      "data": {
+        "amount": 500.00,
+        "invoice_number": "INV-98767",
+        "destination_bank_id": "0102",
+        "destination_id": "V18367443",
+        "destination_mobile_number": "584241513063",
+        "origin_mobile_number": "584126935529",
+        "payment_reference": "REF-12345",
+        "twofactor_auth": "654321",
+        "ipaddress": "192.168.1.100"
+      }
+    }
+    ```
+
+    **Success Response:**
+    ```json
+    {
+      "message": "Procesado",
+      "data": {
+        "transaction_id": "TRX-C2P-123456",
+        "status": "approved",
+        "amount": 500.00,
+        "currency": "ves",
+        "reference": "REF-12345"
+      }
+    }
+    ```
+
+    ---
+
+    ### Search C2P Transaction
+
+    Search for a specific C2P transaction by details.
+
+    **Endpoint:** `POST /api_mercantil_c2p_search`
+
+    **Parameters:**
+
+    <ParamField body="destination_mobile_number" type="string" required>
+      Recipient's phone number (will be encrypted)
+    </ParamField>
+
+    <ParamField body="origin_mobile_number" type="string" required>
+      Sender's phone number (will be encrypted)
+    </ParamField>
+
+    <ParamField body="payment_reference" type="string" required>
+      Payment reference to search
+    </ParamField>
+
+    <ParamField body="date_pay" type="string" required>
+      Payment date in ISO format
+    </ParamField>
+
+    <ParamField body="amount" type="number" required>
+      Payment amount
+    </ParamField>
+
+    <ParamField body="ipaddress" type="string" required>
+      Customer's IP address
+    </ParamField>
+
+    **Request Example:**
+    ```json
+    {
+      "data": {
+        "destination_mobile_number": "584241513063",
+        "origin_mobile_number": "584126935529",
+        "payment_reference": "REF-12345",
+        "date_pay": "2026-03-13",
+        "amount": 500.00,
+        "ipaddress": "192.168.1.100"
+      }
+    }
+    ```
+
+    **Response:**
+    ```json
+    {
+      "message": "Procesado",
+      "data": [
+        {
+          "transaction_id": "TRX-C2P-123456",
+          "status": "approved",
+          "amount": 500.00,
+          "date": "2026-03-13T14:30:00Z",
+          "reference": "REF-12345"
+        }
+      ]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Reconciliation
+
+Automated bank reconciliation for Mercantil transactions.
+
+**Endpoint:** `POST /api_mercantil`
+
+### Process
+
+1. Lists available transaction files from Mercantil TED service
+2. Downloads encrypted .7z files containing transaction data
+3. Decrypts and parses .cif files
+4. Inserts transactions into reconciliation database tables
+
+### Response Format
+
+```json
+{
+  "message": "Proceso culminado",
+  "status": 200,
+  "fecha_reg": "20260313",
+  "num_cta": "01020105530000767246",
+  "saldo_apertura": "150000.50",
+  "tipo_detalle": "01",
+  "monto_mov": 500.00,
+  "tipo_op": "C"
+}
+```
+
+<Warning>
+  **Reconciliation Notes**:
+  - Runs automatically for configured date ranges
+  - Processes both credit (C) and debit (D) transactions
+  - Stores results in `conc_conciliado_b` and `conc_conciliado_c` tables
+  - Uses AES256 decryption for file contents
+</Warning>
+
+---
+
+## Bank Codes
+
+| Code | Bank Name |
+|------|----------|
+| 0102 | Banco de Venezuela |
+| 0105 | Banco Mercantil |
+| 0108 | Banco Provincial |
+| 0114 | Bancaribe |
+| 0115 | Banco Exterior |
+| 0134 | Banesco |
+| 0171 | Banco Activo |
+| 0172 | Bancamiga |
+| 0175 | Banco Bicentenario |
+
+---
+
+## Error Handling
+
+### Common Errors
+
+| Error | Description | Solution |
+|-------|-------------|----------|
+| Invalid customer_id | ID format incorrect | Use format: V12345678 or J12345678 |
+| Insufficient funds | Account balance too low | Request different payment method |
+| Invalid OTP | Two-factor code incorrect | Request new OTP and retry |
+| Expired card | Card past expiration date | Request updated card information |
+| Blocked card | Card blocked by bank | Contact bank for card status |
+
+### Error Response Format
+
+```json
+{
+  "message": "Error",
+  "error": {
+    "code": "INVALID_CARD",
+    "message": "La tarjeta ingresada no es válida",
+    "details": "Card number failed validation"
+  }
+}
+```
+
+---
+
+## Integration Example
+
+```javascript
+// Example: Process TDD payment with 2FA
+
+// Step 1: Request OTP
+const requestAuth = httpsCallable(functions, 'api_mercantil_auth');
+const authResult = await requestAuth({
+  customer_id: 'V18366876',
+  card_number: '5018782000662873',
+  ipaddress: '192.168.1.100'
+});
+
+// Step 2: Get OTP from user
+const otp = prompt('Enter SMS code:');
+
+// Step 3: Process payment
+const processPayment = httpsCallable(functions, 'api_mercantil_tdd_pay');
+const paymentResult = await processPayment({
+  amount: 150.50,
+  invoice_number: 'INV-' + Date.now(),
+  customer_id: 'V18366876',
+  card_number: '5018782000662873',
+  cvv: '123',
+  account_type: 'cc',
+  expiration_date: '2026/12',
+  twofactor_auth: otp,
+  ipaddress: '192.168.1.100'
+});
+
+if (paymentResult.data.data.status === 'approved') {
+  console.log('Payment successful!', paymentResult.data.data.transaction_id);
+}
+```
+
+<Warning>
+  **Best Practices**:
+  - Always encrypt sensitive data before transmission
+  - Validate card numbers and expiration dates before API calls
+  - Implement retry logic for network failures
+  - Store transaction IDs for reconciliation
+  - Handle all error responses gracefully
+</Warning>

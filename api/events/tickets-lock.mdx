@@ -1,0 +1,379 @@
+---
+title: 'Lock Tickets'
+api: 'POST https://us-central1-[project-id].cloudfunctions.net/tickets_lock'
+description: 'Temporarily lock tickets during the purchase process'
+---
+
+## Overview
+
+This endpoint temporarily locks one or more tickets to prevent double-booking during the checkout process. Locked tickets are held for a specified duration and automatically released if the purchase is not completed.
+
+## Request
+
+<ParamField body="data" type="object" required>
+  Request data object
+  
+  <ParamField body="data.ticketd_reserved" type="array" required>
+    Array of ticket IDs to lock
+  </ParamField>
+  
+  <ParamField body="data.reserved_time" type="number" required>
+    Lock duration in seconds (e.g., 300 for 5 minutes)
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Response message indicating the result
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data object
+  
+  <ResponseField name="data.valido" type="boolean">
+    Indicates whether the operation was successful
+  </ResponseField>
+  
+  <ResponseField name="data.tickets" type="array">
+    Array of successfully locked ticket IDs (only on success)
+  </ResponseField>
+  
+  <ResponseField name="data.nodisponible" type="array">
+    Array of unavailable ticket IDs (only on failure)
+  </ResponseField>
+</ResponseField>
+
+## Lock Validation
+
+The endpoint performs two validation checks:
+
+1. **Ticket Status Check** - Verifies tickets have `status = true` (available)
+2. **Block Table Check** - Verifies tickets are not already locked in `tickets_blocked` table
+
+If any ticket fails validation, the entire operation is rejected and no tickets are locked.
+
+## Automatic Unlock
+
+Locked tickets are automatically released when:
+
+- The `locked_up` timestamp expires
+- The `tickets_unlock` endpoint is called (removes all expired locks)
+- The `tickets_unlock_param` endpoint is called with specific ticket IDs
+
+## Related Endpoints
+
+### Unlock Expired Tickets
+
+**Endpoint:** `tickets_unlock`
+
+Removes all ticket locks where `locked_up <= current_time`.
+
+```json
+{
+  "data": {}
+}
+```
+
+This should be called periodically (e.g., via cron job) to clean up expired locks.
+
+### Unlock Specific Tickets
+
+**Endpoint:** `tickets_unlock_param`
+
+Manually unlocks specific tickets (e.g., when user cancels checkout).
+
+```json
+{
+  "data": {
+    "ticketd_reserved": [
+      "ABC123XYZ-ticket001",
+      "ABC123XYZ-ticket002"
+    ]
+  }
+}
+```
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://us-central1-[project-id].cloudfunctions.net/tickets_lock \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "ticketd_reserved": [
+        "ABC123XYZ-ticket001",
+        "ABC123XYZ-ticket002",
+        "ABC123XYZ-ticket003"
+      ],
+      "reserved_time": 300
+    }
+  }'
+```
+
+```javascript JavaScript
+const lockTickets = async (ticketIds, reserveTimeSeconds = 300) => {
+  const response = await fetch(
+    'https://us-central1-[project-id].cloudfunctions.net/tickets_lock',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          ticketd_reserved: ticketIds,
+          reserved_time: reserveTimeSeconds
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+
+// Usage
+const ticketsToLock = [
+  'ABC123XYZ-ticket001',
+  'ABC123XYZ-ticket002',
+  'ABC123XYZ-ticket003'
+];
+
+lockTickets(ticketsToLock, 300)
+  .then(data => {
+    if (data.data.valido) {
+      console.log('Tickets locked successfully');
+      console.log('Locked tickets:', data.data.tickets);
+      
+      // Start checkout process
+      // Set timer to unlock if purchase not completed
+      setTimeout(() => {
+        unlockTickets(ticketsToLock);
+      }, 300000); // 5 minutes
+    } else {
+      console.error('Some tickets unavailable:', data.data.nodisponible);
+    }
+  })
+  .catch(error => console.error('Error:', error));
+```
+
+```javascript Firebase Functions
+const { getFunctions, httpsCallable } = require('firebase/functions');
+
+const functions = getFunctions();
+const lockTickets = httpsCallable(functions, 'tickets_lock');
+
+const ticketIds = [
+  'ABC123XYZ-ticket001',
+  'ABC123XYZ-ticket002'
+];
+
+lockTickets({
+  ticketd_reserved: ticketIds,
+  reserved_time: 300 // 5 minutes
+})
+  .then((result) => {
+    if (result.data.data.valido) {
+      console.log('Tickets locked:', result.data.data.tickets);
+      // Proceed with checkout
+    } else {
+      console.error('Unavailable:', result.data.data.nodisponible);
+    }
+  })
+  .catch((error) => {
+    console.error('Error:', error);
+  });
+```
+
+```javascript React Checkout Example
+import { useState, useEffect } from 'react';
+
+function CheckoutPage({ selectedTickets }) {
+  const [lockExpiry, setLockExpiry] = useState(null);
+  
+  useEffect(() => {
+    // Lock tickets when checkout page loads
+    const lockDuration = 300; // 5 minutes
+    
+    lockTickets(selectedTickets, lockDuration)
+      .then(result => {
+        if (result.data.valido) {
+          const expiryTime = Date.now() + (lockDuration * 1000);
+          setLockExpiry(expiryTime);
+        } else {
+          // Handle unavailable tickets
+          alert(`Some tickets are no longer available: ${result.data.nodisponible.join(', ')}`);
+        }
+      });
+    
+    // Cleanup: unlock tickets if user leaves without purchasing
+    return () => {
+      if (!purchaseCompleted) {
+        unlockTickets(selectedTickets);
+      }
+    };
+  }, [selectedTickets]);
+  
+  return (
+    <div>
+      <h1>Checkout</h1>
+      {lockExpiry && (
+        <CountdownTimer expiry={lockExpiry} />
+      )}
+      {/* Checkout form */}
+    </div>
+  );
+}
+```
+
+</CodeGroup>
+
+## Example Response
+
+### Success
+
+```json
+{
+  "message": "Tickets blocked",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": [
+      "ABC123XYZ-ticket001",
+      "ABC123XYZ-ticket002",
+      "ABC123XYZ-ticket003"
+    ]
+  }
+}
+```
+
+### Error - Tickets Already Sold
+
+```json
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": [
+      "ABC123XYZ-ticket002"
+    ]
+  }
+}
+```
+
+### Error - Tickets Already Locked
+
+```json
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": [
+      "ABC123XYZ-ticket001",
+      "ABC123XYZ-ticket003"
+    ]
+  }
+}
+```
+
+## Lock Table Schema
+
+The `tickets_blocked` table stores temporary locks:
+
+```sql
+CREATE TABLE tickets_blocked (
+  ticket_id VARCHAR PRIMARY KEY,
+  locked_up TIMESTAMP,
+  date_created TIMESTAMP
+);
+```
+
+<ResponseField name="ticket_id" type="string">
+  Unique ticket identifier
+</ResponseField>
+
+<ResponseField name="locked_up" type="timestamp">
+  Expiration timestamp (current_time + reserved_time)
+</ResponseField>
+
+<ResponseField name="date_created" type="timestamp">
+  When the lock was created
+</ResponseField>
+
+## Best Practices
+
+1. **Lock Duration** - Use 5-10 minutes (300-600 seconds) to give users time to complete checkout
+2. **Atomic Operations** - All tickets are locked together or none are locked
+3. **Clean Up** - Call `tickets_unlock_param` if user cancels checkout
+4. **Scheduled Cleanup** - Run `tickets_unlock` every 1-5 minutes via cron job
+5. **User Feedback** - Show countdown timer to users indicating when their lock expires
+6. **Retry Logic** - If lock fails, show which tickets are unavailable and offer alternatives
+
+## Common Integration Pattern
+
+```javascript
+class TicketCheckout {
+  constructor(tickets, lockDuration = 300) {
+    this.tickets = tickets;
+    this.lockDuration = lockDuration;
+    this.lockExpiry = null;
+  }
+  
+  async startCheckout() {
+    // Lock tickets
+    const result = await lockTickets(this.tickets, this.lockDuration);
+    
+    if (!result.data.valido) {
+      throw new Error(`Tickets unavailable: ${result.data.nodisponible.join(', ')}`);
+    }
+    
+    this.lockExpiry = Date.now() + (this.lockDuration * 1000);
+    
+    // Set up auto-extend if needed
+    this.setupLockExtension();
+    
+    return result;
+  }
+  
+  async completePurchase() {
+    // Process payment
+    // ...
+    
+    // Locks are automatically removed when tickets are marked as sold
+    // (status changed from true to false)
+  }
+  
+  async cancelCheckout() {
+    // Explicitly unlock tickets
+    await unlockTickets(this.tickets);
+  }
+  
+  setupLockExtension() {
+    // Optional: Extend lock if user is still active
+    const extendAt = this.lockExpiry - 60000; // 1 minute before expiry
+    
+    setTimeout(() => {
+      if (this.isCheckoutActive()) {
+        this.startCheckout(); // Re-lock for another period
+      }
+    }, extendAt - Date.now());
+  }
+}
+```
+
+## Notes
+
+- Locks are implemented in PostgreSQL for transaction consistency
+- The operation validates all tickets before locking any
+- If any ticket is unavailable, no tickets are locked (all-or-nothing)
+- Expired locks do not affect ticket availability queries in `tickets_list_event_sales`
+- Locks are automatically removed when tickets are sold (status changes to false)

@@ -1,0 +1,511 @@
+---
+title: 'Banco de Venezuela'
+description: 'Mobile payment verification and automated conciliation with Banco de Venezuela'
+---
+
+## Overview
+
+The Banco de Venezuela (BDV) integration provides mobile payment verification and automated bank reconciliation services. This integration allows you to verify Pago Móvil transactions and automatically reconcile bank movements.
+
+<Warning>
+  **API Key Security**: All BDV endpoints require a valid API key (`x-api-key` header). Keep your API key secure and never expose it in client-side code.
+</Warning>
+
+## Authentication
+
+**Required Headers:**
+- `x-api-key` or `X-API-KEY`: Your BDV API key
+- `Content-Type: application/json`
+
+**Environment:**
+- Production: `https://bdvconciliacion.banvenez.com`
+- QA: `https://bdvconciliacionqa.banvenez.com:444`
+
+---
+
+## Mobile Payment Verification
+
+Verify a Pago Móvil transaction by searching for specific payment details.
+
+### Endpoint
+
+```
+POST /mobile_payment_bcv
+```
+
+### Request Parameters
+
+<ParamField body="ced_pag" type="string" required>
+  Payer's ID number (cédula)
+</ParamField>
+
+<ParamField body="tel_pag" type="string" required>
+  Payer's phone number
+</ParamField>
+
+<ParamField body="tel_dest" type="string" required>
+  Destination phone number
+</ParamField>
+
+<ParamField body="referencia" type="string" required>
+  Payment reference number
+</ParamField>
+
+<ParamField body="fec_pag" type="string" required>
+  Payment date in DD/MM/YYYY format
+</ParamField>
+
+<ParamField body="importe" type="string" required>
+  Payment amount
+</ParamField>
+
+<ParamField body="cod_ban_origen" type="string" required>
+  Origin bank code (4 digits)
+</ParamField>
+
+### Request Example
+
+```json
+{
+  "data": {
+    "ced_pag": "V12345678",
+    "tel_pag": "04141234567",
+    "tel_dest": "04241234567",
+    "referencia": "123456789",
+    "fec_pag": "13/03/2026",
+    "importe": "500.00",
+    "cod_ban_origen": "0102"
+  }
+}
+```
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data.resultado" type="object">
+  Payment verification result
+</ResponseField>
+
+### Success Response Example
+
+```json
+{
+  "message": "Conciliacion Pago movil BDV",
+  "status": 200,
+  "data": {
+    "resultado": {
+      "found": true,
+      "transaction": {
+        "referencia": "123456789",
+        "fecha": "13/03/2026",
+        "monto": "500.00",
+        "status": "aprobado",
+        "banco_origen": "0102",
+        "cedula_pagador": "V12345678",
+        "telefono_pagador": "04141234567",
+        "telefono_destino": "04241234567"
+      }
+    }
+  }
+}
+```
+
+### Not Found Response
+
+```json
+{
+  "message": "Conciliacion Pago movil BDV",
+  "status": 200,
+  "data": {
+    "resultado": {
+      "found": false,
+      "message": "No se encontró la transacción"
+    }
+  }
+}
+```
+
+---
+
+## Bank Reconciliation
+
+Automatically retrieve and reconcile all bank movements for a specific date range.
+
+### Endpoint
+
+```
+POST /conciliation_bdv
+```
+
+### Process Overview
+
+1. Retrieves all movements for the current date
+2. Filters for credit and debit transactions
+3. Checks for duplicate entries in reconciliation database
+4. Inserts new transactions into `conc_conciliado_b` and `conc_conciliado_c` tables
+
+### Request
+
+No request body required. The function automatically queries movements for the current date.
+
+**Note:** Account number and API key are configured in the backend.
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data.data.movs" type="array">
+  Array of bank movements
+</ResponseField>
+
+### Success Response Example
+
+```json
+{
+  "message": "Conciliacion Banco de Venezuela",
+  "status": 200,
+  "data": {
+    "data": {
+      "cuenta": "01020105530000767246",
+      "fechaIni": "13/03/2026",
+      "fechaFin": "13/03/2026",
+      "movs": [
+        {
+          "fecha": "13/03/2026",
+          "referencia": "123456789",
+          "descripcion": "PAGO MOVIL",
+          "importe": "500.00",
+          "mov": "CREDITO",
+          "saldo": "15500.00"
+        },
+        {
+          "fecha": "13/03/2026",
+          "referencia": "987654321",
+          "descripcion": "TRANSFERENCIA",
+          "importe": "250.00",
+          "mov": "DEBITO",
+          "saldo": "15250.00"
+        }
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Movement Types
+
+<Tabs>
+  <Tab title="CREDITO (Credit)">
+    **Credit Transactions** - Money received into the account
+
+    **Common Sources:**
+    - Pago Móvil received
+    - Bank transfers received
+    - Direct deposits
+    - Check deposits
+
+    **Database Storage:**
+    - Table: `conc_conciliado_b`
+    - Type: `NC` (Nota de Crédito)
+    - Operations: Increase account balance
+
+    **Example:**
+    ```json
+    {
+      "fecha": "13/03/2026",
+      "referencia": "123456789",
+      "descripcion": "PAGO MOVIL",
+      "importe": "500.00",
+      "mov": "CREDITO",
+      "saldo": "15500.00"
+    }
+    ```
+  </Tab>
+
+  <Tab title="DEBITO (Debit)">
+    **Debit Transactions** - Money withdrawn from the account
+
+    **Common Sources:**
+    - Pago Móvil sent
+    - Bank transfers sent
+    - Card purchases
+    - ATM withdrawals
+    - Bank fees
+
+    **Database Storage:**
+    - Table: `conc_conciliado_b` and `conc_conciliado_c`
+    - Type: `ND` (Nota de Débito)
+    - Operations: Decrease account balance
+
+    **Example:**
+    ```json
+    {
+      "fecha": "13/03/2026",
+      "referencia": "987654321",
+      "descripcion": "TRANSFERENCIA",
+      "importe": "250.00",
+      "mov": "DEBITO",
+      "saldo": "15250.00"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Reconciliation Database Schema
+
+### Table: conc_conciliado_b
+
+Stores all reconciled bank movements (credits and debits).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| no_cia | string | Company number (always "1") |
+| no_cta | string | Bank account number |
+| procedencia | string | Origin code ("A" for automatic) |
+| tipo_doc | string | Document type ("NC" or "ND") |
+| no_docu | string | Document/reference number |
+| fecha | datetime | Transaction date |
+| monto | decimal | Transaction amount |
+| no_fisico | string | Physical document number |
+| serie_fisico | string | Document series |
+
+### Table: conc_conciliado_c
+
+Stores additional reconciliation data for debit transactions.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| no_cia | string | Company number |
+| no_cta | string | Bank account number |
+| procedencia | string | Origin code ("W" for web) |
+| tipo_doc | string | Document type ("ND") |
+| no_docu | string | Document/reference number |
+| fecha | datetime | Transaction date |
+| monto | decimal | Transaction amount |
+| no_fisico | string | Physical document number |
+| serie_fisico | string | Document series |
+| tipo_cambio | decimal | Exchange rate (if applicable) |
+| event_id | string | Associated event ID |
+| event_name | string | Associated event name |
+| order_payout | string | Order payout reference |
+| transaction | string | Transaction reference |
+
+---
+
+## Bank Codes (Venezuela)
+
+| Code | Bank Name |
+|------|----------|
+| 0102 | Banco de Venezuela |
+| 0104 | Banco Venezolano de Crédito |
+| 0105 | Banco Mercantil |
+| 0108 | Banco Provincial (BBVA) |
+| 0114 | Bancaribe |
+| 0115 | Banco Exterior |
+| 0128 | Banco Caroní |
+| 0134 | Banesco |
+| 0137 | Banco Sofitasa |
+| 0138 | Banco Plaza |
+| 0151 | Banco Fondo Común (BFC) |
+| 0163 | Banco del Tesoro |
+| 0166 | Banco Agrícola de Venezuela |
+| 0168 | Bancrecer |
+| 0169 | Mi Banco |
+| 0171 | Banco Activo |
+| 0172 | Bancamiga |
+| 0174 | Banplus |
+| 0175 | Banco Bicentenario |
+| 0177 | Banco de la Fuerza Armada (Banfanb) |
+| 0191 | Banco Nacional de Crédito (BNC) |
+
+---
+
+## Error Handling
+
+### Common Errors
+
+| Error | Description | Solution |
+|-------|-------------|----------|
+| Invalid API Key | API key is missing or incorrect | Verify API key in configuration |
+| Transaction Not Found | No matching transaction in BDV system | Verify payment details and retry |
+| Invalid Date Format | Date format is incorrect | Use DD/MM/YYYY format |
+| Account Not Found | Bank account not configured | Verify account number in config |
+| Network Error | Unable to connect to BDV API | Check network connectivity |
+
+### Error Response Format
+
+```json
+{
+  "message": "Conciliacion Pago movil BDV",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "message": "Invalid date format",
+      "details": "Date must be in DD/MM/YYYY format"
+    }
+  }
+}
+```
+
+---
+
+## Integration Example
+
+```javascript
+// Example 1: Verify a mobile payment
+const verifyPayment = httpsCallable(functions, 'mobile_payment_bcv');
+
+const paymentData = {
+  ced_pag: 'V12345678',
+  tel_pag: '04141234567',
+  tel_dest: '04241234567',
+  referencia: '123456789',
+  fec_pag: '13/03/2026',
+  importe: '500.00',
+  cod_ban_origen: '0102'
+};
+
+try {
+  const result = await verifyPayment(paymentData);
+  
+  if (result.data.data.resultado.found) {
+    console.log('Payment verified:', result.data.data.resultado.transaction);
+    // Update order status, send confirmation, etc.
+  } else {
+    console.log('Payment not found');
+    // Request user to verify payment details
+  }
+} catch (error) {
+  console.error('Verification failed:', error);
+}
+
+// Example 2: Run daily reconciliation (backend scheduled function)
+const reconcile = httpsCallable(functions, 'conciliation_bdv');
+
+try {
+  const result = await reconcile();
+  console.log('Reconciliation complete:', result.data.data.movs.length, 'movements processed');
+} catch (error) {
+  console.error('Reconciliation failed:', error);
+}
+```
+
+---
+
+## Automated Reconciliation
+
+### Scheduled Execution
+
+For automated daily reconciliation, configure a Cloud Scheduler to trigger the `conciliation_bdv` function:
+
+```javascript
+// Cloud Scheduler configuration
+// Schedule: Daily at 2:00 AM
+// Target: HTTP POST to conciliation_bdv endpoint
+
+exports.scheduledReconciliation = functions.pubsub
+  .schedule('0 2 * * *')
+  .timeZone('America/Caracas')
+  .onRun(async (context) => {
+    const axios = require('axios');
+    
+    try {
+      const response = await axios.post(
+        'https://your-region-your-project.cloudfunctions.net/conciliation_bdv',
+        {},
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log('Daily reconciliation completed:', response.data);
+      return null;
+    } catch (error) {
+      console.error('Reconciliation failed:', error);
+      throw error;
+    }
+  });
+```
+
+### Reconciliation Workflow
+
+1. **Fetch Movements**: Query BDV API for current date movements
+2. **Filter Transactions**: Process only CREDITO and DEBITO movements
+3. **Check Duplicates**: Query database to avoid duplicate entries
+4. **Insert Records**: Add new transactions to reconciliation tables
+5. **Log Results**: Return summary of processed movements
+
+<Warning>
+  **Best Practices**:
+  - Run reconciliation during off-peak hours (2-4 AM)
+  - Store original API responses for audit trail
+  - Implement alerting for reconciliation failures
+  - Monitor duplicate transaction attempts
+  - Validate all movements before database insertion
+  - Keep API keys secure in environment variables
+</Warning>
+
+---
+
+## Testing
+
+### QA Environment
+
+Use the QA environment for testing:
+
+```javascript
+const QA_ENDPOINT = 'https://bdvconciliacionqa.banvenez.com:444';
+const QA_API_KEY = 'your-qa-api-key';
+
+// Test mobile payment verification
+const testPaymentVerification = async () => {
+  const response = await axios.post(
+    `${QA_ENDPOINT}/getMovement`,
+    {
+      cedulaPagador: 'V12345678',
+      telefonoPagador: '04141234567',
+      telefonoDestino: '04241234567',
+      referencia: '123456789',
+      fechaPago: '13/03/2026',
+      importe: '500.00',
+      bancoOrigen: '0102'
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': QA_API_KEY
+      }
+    }
+  );
+  
+  console.log('Test result:', response.data);
+};
+```
+
+### Test Cases
+
+1. **Valid Payment Verification**: Test with known transaction
+2. **Invalid Reference**: Test with non-existent reference
+3. **Date Range**: Test reconciliation with various date ranges
+4. **Duplicate Prevention**: Test inserting same transaction twice
+5. **Error Handling**: Test with invalid API key or malformed data

@@ -1,0 +1,484 @@
+---
+title: 'Validate Transactions'
+api: 'POST https://api.tmt.com/transactions_validate'
+description: 'Validates transaction data before order creation to ensure data integrity'
+---
+
+## Overview
+
+The `transactions_validate` endpoint validates transaction data before creating an order. While this endpoint is not explicitly implemented in the current codebase, it represents a best practice for validating order data before submission.
+
+<Warning>
+  This is a recommended endpoint for production implementations. Always validate transaction data client-side and server-side before creating orders.
+</Warning>
+
+## Validation Requirements
+
+When implementing transaction validation, check the following:
+
+### Transaction Data
+
+<ParamField body="amount" type="number" required>
+  Must be greater than 0 and match the sum of all tickets
+</ParamField>
+
+<ParamField body="transactions" type="array" required>
+  Array must not be empty and all transactions must have valid data
+  
+  <ParamField body="amount" type="number">
+    Must be positive
+  </ParamField>
+  
+  <ParamField body="status" type="boolean">
+    Should be true for successful payments
+  </ParamField>
+  
+  <ParamField body="custody_account" type="object">
+    Must reference a valid custody account
+  </ParamField>
+  
+  <ParamField body="payment_id" type="string">
+    Must be a valid payment method ID
+  </ParamField>
+  
+  <ParamField body="amount_exchange" type="number">
+    Must match amount when converted using exchange_rate
+  </ParamField>
+</ParamField>
+
+### Ticket Data
+
+<ParamField body="tickets" type="array" required>
+  Array must not be empty
+  
+  <ParamField body="ticket_id" type="string">
+    Must reference an available (unsold) ticket
+  </ParamField>
+  
+  <ParamField body="amount" type="number">
+    Must match ticket price in system
+  </ParamField>
+  
+  <ParamField body="metadata.customer_email" type="string">
+    Must be a valid email address
+  </ParamField>
+  
+  <ParamField body="metadata.customer_id" type="string">
+    Must be a valid identification number
+  </ParamField>
+</ParamField>
+
+### Financial Validation
+
+<ParamField body="exchange_rate" type="number" required>
+  Must be current and valid for the currency pair
+</ParamField>
+
+## Validation Rules
+
+### Amount Reconciliation
+
+```javascript
+// Sum of transaction amounts must equal order amount
+const transactionTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
+if (transactionTotal !== orderAmount) {
+  throw new Error('Transaction amounts do not match order amount');
+}
+
+// Sum of ticket amounts must equal order amount
+const ticketTotal = tickets.reduce((sum, t) => sum + t.amount, 0);
+if (ticketTotal !== orderAmount) {
+  throw new Error('Ticket amounts do not match order amount');
+}
+```
+
+### Ticket Availability
+
+```javascript
+// All tickets must be available for purchase
+for (const ticket of tickets) {
+  const ticketRef = await db.collection('events')
+    .doc(eventId)
+    .collection('tickets')
+    .doc(ticket.id)
+    .get();
+  
+  const ticketData = ticketRef.data();
+  
+  if (!ticketData) {
+    throw new Error(`Ticket ${ticket.id} not found`);
+  }
+  
+  if (ticketData.status === false) {
+    throw new Error(`Ticket ${ticket.id} is already sold`);
+  }
+}
+```
+
+### Payment Method Validation
+
+```javascript
+// Validate payment methods exist and are active
+for (const transaction of transactions) {
+  const paymentMethod = await db.collection('payment_methods')
+    .doc(transaction.payment_id)
+    .get();
+  
+  if (!paymentMethod.exists) {
+    throw new Error(`Invalid payment method: ${transaction.payment_id}`);
+  }
+  
+  if (!paymentMethod.data().active) {
+    throw new Error(`Payment method ${transaction.payment_id} is inactive`);
+  }
+}
+```
+
+### Custody Account Validation
+
+```javascript
+// Validate custody accounts exist
+for (const transaction of transactions) {
+  const account = await db.collection('custody_accounts')
+    .doc(transaction.custody_account.id)
+    .get();
+  
+  if (!account.exists) {
+    throw new Error(`Invalid custody account: ${transaction.custody_account.id}`);
+  }
+}
+```
+
+## Response
+
+<ResponseField name="valid" type="boolean">
+  Overall validation status
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  Array of validation error objects
+  
+  <ResponseField name="field" type="string">
+    Field that failed validation
+  </ResponseField>
+  
+  <ResponseField name="message" type="string">
+    Error message
+  </ResponseField>
+  
+  <ResponseField name="code" type="string">
+    Error code for programmatic handling
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="warnings" type="array">
+  Array of warning objects (non-blocking issues)
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.tmt.com/transactions_validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "amount": 150.00,
+      "event_id": "evt_123",
+      "transactions": [
+        {
+          "amount": 150.00,
+          "custody_account": {
+            "id": "acc_001"
+          },
+          "payment_id": "pay_card_001",
+          "status": true,
+          "amount_exchange": 150.00,
+          "amount_exchange_rate": 1.0
+        }
+      ],
+      "tickets": [
+        {
+          "ticket_id": "evt_123-tkt_001",
+          "amount": 75.00,
+          "metadata": {
+            "customer_email": "john@example.com",
+            "customer_id": "12345678"
+          }
+        },
+        {
+          "ticket_id": "evt_123-tkt_002",
+          "amount": 75.00,
+          "metadata": {
+            "customer_email": "john@example.com",
+            "customer_id": "12345678"
+          }
+        }
+      ]
+    }
+  }'
+```
+
+```javascript JavaScript - Client-Side Validation
+const validateTransactionData = async (orderData) => {
+  const errors = [];
+  
+  // Validate amounts
+  const transactionTotal = orderData.transactions.reduce(
+    (sum, t) => sum + t.amount, 
+    0
+  );
+  const ticketTotal = orderData.tickets.reduce(
+    (sum, t) => sum + t.amount, 
+    0
+  );
+  
+  if (transactionTotal !== orderData.amount) {
+    errors.push({
+      field: 'transactions',
+      message: 'Transaction amounts do not match order amount',
+      code: 'AMOUNT_MISMATCH'
+    });
+  }
+  
+  if (ticketTotal !== orderData.amount) {
+    errors.push({
+      field: 'tickets',
+      message: 'Ticket amounts do not match order amount',
+      code: 'AMOUNT_MISMATCH'
+    });
+  }
+  
+  // Validate transaction status
+  const failedTransactions = orderData.transactions.filter(t => !t.status);
+  if (failedTransactions.length > 0) {
+    errors.push({
+      field: 'transactions',
+      message: 'All transactions must have status: true',
+      code: 'INVALID_TRANSACTION_STATUS'
+    });
+  }
+  
+  // Validate email addresses
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (const ticket of orderData.tickets) {
+    if (!emailRegex.test(ticket.metadata.customer_email)) {
+      errors.push({
+        field: `tickets[${ticket.id}].metadata.customer_email`,
+        message: 'Invalid email address',
+        code: 'INVALID_EMAIL'
+      });
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors: errors
+  };
+};
+
+// Usage
+const validation = await validateTransactionData(orderData);
+if (!validation.valid) {
+  console.error('Validation errors:', validation.errors);
+  // Display errors to user
+} else {
+  // Proceed with order creation
+  await createOrder(orderData);
+}
+```
+
+```javascript JavaScript - Server-Side Validation
+const validateTransactionDataServer = async (req, res) => {
+  const orderData = req.body.data;
+  const errors = [];
+  const warnings = [];
+  
+  try {
+    // Validate event exists
+    const eventRef = await db.collection('events').doc(orderData.event_id).get();
+    if (!eventRef.exists) {
+      errors.push({
+        field: 'event_id',
+        message: 'Event not found',
+        code: 'EVENT_NOT_FOUND'
+      });
+      return res.send({ valid: false, errors });
+    }
+    
+    // Validate tickets are available
+    for (const ticket of orderData.tickets) {
+      const [eventId, ticketId] = ticket.ticket_id.split('-');
+      const ticketRef = await db.collection('events')
+        .doc(eventId)
+        .collection('tickets')
+        .doc(ticketId)
+        .get();
+      
+      if (!ticketRef.exists) {
+        errors.push({
+          field: `tickets`,
+          message: `Ticket ${ticket.ticket_id} not found`,
+          code: 'TICKET_NOT_FOUND'
+        });
+      } else if (ticketRef.data().status === false) {
+        errors.push({
+          field: `tickets`,
+          message: `Ticket ${ticket.ticket_id} is already sold`,
+          code: 'TICKET_UNAVAILABLE'
+        });
+      }
+    }
+    
+    // Validate custody accounts
+    for (const transaction of orderData.transactions) {
+      const accountRef = await db.collection('custody_accounts')
+        .doc(transaction.custody_account.id)
+        .get();
+      
+      if (!accountRef.exists) {
+        errors.push({
+          field: 'transactions',
+          message: `Custody account ${transaction.custody_account.id} not found`,
+          code: 'INVALID_CUSTODY_ACCOUNT'
+        });
+      }
+    }
+    
+    // Validate exchange rates are recent
+    const exchangeRateAge = Date.now() - orderData.exchange_rate_timestamp;
+    if (exchangeRateAge > 3600000) { // 1 hour
+      warnings.push({
+        field: 'exchange_rate',
+        message: 'Exchange rate may be outdated',
+        code: 'OLD_EXCHANGE_RATE'
+      });
+    }
+    
+    res.send({
+      valid: errors.length === 0,
+      errors: errors,
+      warnings: warnings
+    });
+    
+  } catch (error) {
+    res.status(500).send({
+      valid: false,
+      errors: [{
+        field: 'system',
+        message: error.message,
+        code: 'VALIDATION_ERROR'
+      }]
+    });
+  }
+};
+```
+
+</CodeGroup>
+
+## Validation Error Codes
+
+| Code | Description | Severity |
+|------|-------------|----------|
+| `AMOUNT_MISMATCH` | Transaction/ticket amounts don't match order total | Error |
+| `INVALID_TRANSACTION_STATUS` | Transaction has failed status | Error |
+| `INVALID_EMAIL` | Email format is invalid | Error |
+| `EVENT_NOT_FOUND` | Event ID doesn't exist | Error |
+| `TICKET_NOT_FOUND` | Ticket ID doesn't exist | Error |
+| `TICKET_UNAVAILABLE` | Ticket is already sold | Error |
+| `INVALID_CUSTODY_ACCOUNT` | Custody account doesn't exist | Error |
+| `INVALID_PAYMENT_METHOD` | Payment method doesn't exist or is inactive | Error |
+| `OLD_EXCHANGE_RATE` | Exchange rate timestamp is too old | Warning |
+| `DUPLICATE_TICKET` | Same ticket appears multiple times | Error |
+
+## Best Practices
+
+### Pre-Flight Validation
+
+Always validate before submitting to `order_created`:
+
+```javascript
+const createOrderSafely = async (orderData) => {
+  // 1. Client-side validation
+  const clientValidation = await validateTransactionData(orderData);
+  if (!clientValidation.valid) {
+    throw new Error('Client validation failed');
+  }
+  
+  // 2. Server-side validation
+  const serverValidation = await fetch('/transactions_validate', {
+    method: 'POST',
+    body: JSON.stringify({ data: orderData })
+  }).then(r => r.json());
+  
+  if (!serverValidation.valid) {
+    throw new Error('Server validation failed');
+  }
+  
+  // 3. Create order
+  return await createOrder(orderData);
+};
+```
+
+### Atomic Validation
+
+<Warning>
+  Validate and create orders as close together as possible. Tickets can be sold to other customers between validation and creation.
+</Warning>
+
+### Error Handling
+
+Provide clear error messages to users:
+
+```javascript
+const handleValidationErrors = (errors) => {
+  const userFriendlyMessages = {
+    'TICKET_UNAVAILABLE': 'Sorry, one or more tickets are no longer available. Please select different tickets.',
+    'AMOUNT_MISMATCH': 'There was an error calculating the total. Please refresh and try again.',
+    'INVALID_EMAIL': 'Please provide a valid email address.',
+    'INVALID_PAYMENT_METHOD': 'The selected payment method is not available.'
+  };
+  
+  return errors.map(error => 
+    userFriendlyMessages[error.code] || error.message
+  );
+};
+```
+
+## Related Endpoints
+
+- [Create Order](/api/orders/order-created) - Create order after validation
+- [Generate Transactions](/api/transactions/transactions-generate) - Process validated transactions
+
+## Integration Example
+
+```javascript
+// Complete order flow with validation
+const completeOrderFlow = async (orderData) => {
+  try {
+    // Step 1: Validate
+    console.log('Validating order data...');
+    const validation = await validateOrder(orderData);
+    
+    if (!validation.valid) {
+      console.error('Validation failed:', validation.errors);
+      return { success: false, errors: validation.errors };
+    }
+    
+    // Step 2: Create order
+    console.log('Creating order...');
+    const order = await createOrder(orderData);
+    
+    // Step 3: Monitor processing
+    console.log('Order created:', order.data.order);
+    await monitorOrderProcessing(order.data.order);
+    
+    return { success: true, orderId: order.data.order };
+    
+  } catch (error) {
+    console.error('Order flow error:', error);
+    return { success: false, error: error.message };
+  }
+};
+```

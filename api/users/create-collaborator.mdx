@@ -1,0 +1,187 @@
+---
+title: "Create Collaborator"
+api: "POST https://your-project.cloudfunctions.net/create_collaborator"
+description: "Create a new collaborator user account linked to a client"
+---
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  User data container object
+  
+  <ParamField body="data.name" type="string" required>
+    Full name of the collaborator
+  </ParamField>
+  
+  <ParamField body="data.email" type="string" required>
+    Email address for authentication
+  </ParamField>
+  
+  <ParamField body="data.password" type="string" required>
+    Password for user authentication
+  </ParamField>
+  
+  <ParamField body="data.phone" type="string" required>
+    Contact phone number
+  </ParamField>
+  
+  <ParamField body="data.status" type="boolean" required>
+    Account active status
+  </ParamField>
+  
+  <ParamField body="data.account_type" type="string" required>
+    Type of account
+  </ParamField>
+  
+  <ParamField body="data.client" type="string" required>
+    Client ID that this collaborator is associated with
+  </ParamField>
+  
+  <ParamField body="data.id" type="string" required>
+    Identification document number
+  </ParamField>
+  
+  <ParamField body="data.id_type" type="string" required>
+    Type of identification document
+  </ParamField>
+  
+  <ParamField body="data.city" type="string" required>
+    City for address
+  </ParamField>
+  
+  <ParamField body="data.country" type="string" required>
+    Country for address
+  </ParamField>
+  
+  <ParamField body="data.line" type="string" required>
+    Street address line
+  </ParamField>
+  
+  <ParamField body="data.zip_code" type="string" required>
+    Postal/ZIP code
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="data.uid" type="string">
+    Unique identifier for the created user (present on success)
+  </ResponseField>
+  
+  <ResponseField name="data.error" type="object">
+    Error details (present on failure)
+  </ResponseField>
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/create_collaborator \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "John Smith",
+      "email": "john.smith@acmecorp.com",
+      "password": "SecurePass123!",
+      "phone": "+1-555-0199",
+      "status": true,
+      "account_type": "collaborator",
+      "client": "abc123xyz456",
+      "id": "987654321",
+      "id_type": "PASSPORT",
+      "city": "Los Angeles",
+      "country": "USA",
+      "line": "456 Collaborator St",
+      "zip_code": "90001"
+    }
+  }'
+```
+
+```javascript JavaScript
+const createCollaborator = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/create_collaborator',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          name: 'John Smith',
+          email: 'john.smith@acmecorp.com',
+          password: 'SecurePass123!',
+          phone: '+1-555-0199',
+          status: true,
+          account_type: 'collaborator',
+          client: 'abc123xyz456',
+          id: '987654321',
+          id_type: 'PASSPORT',
+          city: 'Los Angeles',
+          country: 'USA',
+          line: '456 Collaborator St',
+          zip_code: '90001'
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Success Response
+{
+  "message": "Ingresado con el ID: def456uvw789.",
+  "status": 200,
+  "data": {
+    "uid": "def456uvw789"
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use by another account."
+    }
+  }
+}
+```
+
+</ResponseExample>
+
+## Error Codes
+
+| Status Code | Description |
+| --- | --- |
+| 200 | Collaborator successfully created |
+| 400 | Error creating user (email already exists, invalid data, etc.) |
+
+<Note>
+  - The collaborator is created in both Firebase Authentication and the `u_collaborators` Firestore collection
+  - The `client` field must reference a valid client UID
+  - Email addresses must be unique across the system
+  - The `date.create` field is automatically set to the current timestamp
+  - Collaborators are associated with a specific client account
+</Note>

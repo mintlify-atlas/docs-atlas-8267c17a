@@ -1,0 +1,264 @@
+---
+title: 'Platform Data'
+api: 'Multiple endpoints'
+description: 'General platform statistics and metrics'
+---
+
+## Overview
+
+These endpoints provide high-level statistics about the TMT platform, including counts of entities, office status, and collaborator types.
+
+## General Platform Data
+
+### Endpoint
+`POST /general_platform_data`
+
+### Description
+Get counts of all major platform entities.
+
+### Request Body
+No parameters required (empty request body or `{"data": {}}`)
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="result" type="array">
+    Array with single object containing platform counts
+    
+    <ResponseField name="total_events" type="number">
+      Total number of events in the system
+    </ResponseField>
+    
+    <ResponseField name="total_offices" type="number">
+      Total number of box offices/points of sale
+    </ResponseField>
+    
+    <ResponseField name="total_collaborators" type="number">
+      Total number of collaborators (staff/employees)
+    </ResponseField>
+    
+    <ResponseField name="total_clients" type="number">
+      Total number of clients (event producers)
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {}
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos Generales de la plataforma",
+  "status": 200,
+  "data": {
+    "result": [
+      {
+        "total_events": 247,
+        "total_offices": 18,
+        "total_collaborators": 156,
+        "total_clients": 42
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Offices vs Active Offices
+
+### Endpoint
+`POST /offices_vs_offices_active`
+
+### Description
+Compare total offices with active/inactive offices for a specific event.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  <ParamField body="event_id" type="string" required>
+    Event ID to check office status for
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="result" type="array">
+    Array with single object
+    
+    <ResponseField name="total" type="number">
+      Total offices assigned to the event
+    </ResponseField>
+    
+    <ResponseField name="total_activas" type="number">
+      Number of active offices
+    </ResponseField>
+    
+    <ResponseField name="total_inactivas" type="number">
+      Number of inactive offices
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "event_001"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Datos cantidad de taquillas vs taquillas activas",
+  "status": 200,
+  "data": {
+    "result": [
+      {
+        "total": 8,
+        "total_activas": 6,
+        "total_inactivas": 2
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Types of Collaborators
+
+### Endpoint
+`POST /types_of_collaborators`
+
+### Description
+Get breakdown of collaborators by account type.
+
+### Request Body
+No parameters required
+
+### Response
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="result" type="array">
+    Array of collaborator type counts
+    
+    <ResponseField name="account_type" type="string">
+      Collaborator account type name
+    </ResponseField>
+    
+    <ResponseField name="total_collaborators" type="number">
+      Number of collaborators of this type
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {}
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Cantidad de tipos de Colaboradores",
+  "status": 200,
+  "data": {
+    "result": [
+      {
+        "account_type": "Box Office Manager",
+        "total_collaborators": 18
+      },
+      {
+        "account_type": "Cashier",
+        "total_collaborators": 64
+      },
+      {
+        "account_type": "Event Coordinator",
+        "total_collaborators": 23
+      },
+      {
+        "account_type": "Security",
+        "total_collaborators": 35
+      },
+      {
+        "account_type": "Administrator",
+        "total_collaborators": 16
+      }
+    ]
+  }
+}
+```
+
+## Data Sources
+
+These endpoints query Firestore collections:
+- `/events` - Event documents
+- `/offices` - Box office documents
+- `/u_collaborators` - Collaborator user accounts
+- `/u_clients` - Client organizations
+- `/data/collaborator_types` - Collaborator type definitions
+
+## Use Cases
+
+### General Platform Data
+- **Dashboard overview**: Display key platform metrics
+- **System monitoring**: Track growth and usage
+- **Reporting**: Platform-wide statistics
+
+### Offices vs Active Offices
+- **Event management**: See which offices are selling for an event
+- **Resource allocation**: Identify underutilized offices
+- **Operational status**: Monitor office activation
+
+### Types of Collaborators
+- **Workforce analysis**: Understand team composition
+- **Resource planning**: Identify staffing needs
+- **Access control**: Manage permissions by type
+- **Training programs**: Target specific collaborator types
+
+## Related Endpoints
+
+- Sales metrics endpoints for revenue data
+- Money distribution for financial allocation
+- Event-specific indicators for detailed analytics

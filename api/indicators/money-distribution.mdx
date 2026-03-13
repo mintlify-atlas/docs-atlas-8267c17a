@@ -1,0 +1,132 @@
+---
+title: 'Money Distribution'
+api: 'POST /money_distribution'
+description: 'Get revenue distribution by custody accounts'
+---
+
+## Overview
+
+This endpoint retrieves money distribution data showing how revenue is allocated across different custody accounts. It provides aggregated sums grouped by custody account and currency.
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  Request data wrapper
+  
+  <ParamField body="event_id" type="string">
+    Filter by specific event ID
+  </ParamField>
+  
+  <ParamField body="from" type="string">
+    Start date for filtering (YYYY-MM-DD format)
+  </ParamField>
+  
+  <ParamField body="to" type="string">
+    End date for filtering (YYYY-MM-DD format)
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Response message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="distribution" type="array">
+    Array of distribution records grouped by custody account and currency
+    
+    <ResponseField name="custody_account_id" type="string">
+      Custody account identifier
+    </ResponseField>
+    
+    <ResponseField name="custody_account_name" type="string">
+      Custody account name
+    </ResponseField>
+    
+    <ResponseField name="amount_currency" type="string">
+      Currency code (USD, VEF)
+    </ResponseField>
+    
+    <ResponseField name="amount" type="number">
+      Total amount in this account for this currency
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Data Source
+
+This endpoint queries the `orders_payout` table in PostgreSQL, which contains:
+- Payout records for each order
+- Distribution to TMT and Client entities
+- Fixed and variable cost allocations
+- Currency and exchange rate information
+
+## Example Request
+
+```json
+{
+  "data": {
+    "event_id": "event_001",
+    "from": "2026-01-01",
+    "to": "2026-03-31"
+  }
+}
+```
+
+## Example Response
+
+```json
+{
+  "message": "Datos Money Distribution",
+  "status": 200,
+  "data": {
+    "distribution": [
+      {
+        "custody_account_id": "acc_001",
+        "custody_account_name": "TMT Main Account USD",
+        "amount_currency": "USD",
+        "amount": 15420.50
+      },
+      {
+        "custody_account_id": "acc_002",
+        "custody_account_name": "Client Account USD",
+        "amount_currency": "USD",
+        "amount": 48350.75
+      },
+      {
+        "custody_account_id": "acc_003",
+        "custody_account_name": "TMT Main Account VEF",
+        "amount_currency": "VEF",
+        "amount": 562450.00
+      },
+      {
+        "custody_account_id": "acc_004",
+        "custody_account_name": "Client Account VEF",
+        "amount_currency": "VEF",
+        "amount": 1765320.00
+      }
+    ]
+  }
+}
+```
+
+## Use Cases
+
+- **Financial reporting**: View revenue allocation by account
+- **Multi-currency tracking**: Separate USD and VEF distributions
+- **Event analysis**: Filter by specific event to see its revenue distribution
+- **Date range analysis**: Analyze distribution over time periods
+- **Account reconciliation**: Verify amounts in custody accounts
+
+## Related Endpoints
+
+- `split_queries` - Detailed cost breakdown
+- `split_payout` - Payout status tracking
+- `total_sales` - Overall sales metrics

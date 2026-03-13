@@ -1,0 +1,188 @@
+---
+title: "Create Staff"
+api: "POST https://your-project.cloudfunctions.net/create_staff"
+description: "Create a new staff member user account with administrative privileges"
+---
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  User data container object
+  
+  <ParamField body="data.name" type="string" required>
+    Full name of the staff member
+  </ParamField>
+  
+  <ParamField body="data.email" type="string" required>
+    Email address for authentication
+  </ParamField>
+  
+  <ParamField body="data.password" type="string" required>
+    Password for user authentication
+  </ParamField>
+  
+  <ParamField body="data.phone" type="string" required>
+    Contact phone number
+  </ParamField>
+  
+  <ParamField body="data.status" type="boolean" required>
+    Account active status
+  </ParamField>
+  
+  <ParamField body="data.account_type" type="string" required>
+    Type of account
+  </ParamField>
+  
+  <ParamField body="data.id" type="string" required>
+    Identification document number
+  </ParamField>
+  
+  <ParamField body="data.id_type" type="string" required>
+    Type of identification document
+  </ParamField>
+  
+  <ParamField body="data.city" type="string" required>
+    City for address
+  </ParamField>
+  
+  <ParamField body="data.country" type="string" required>
+    Country for address
+  </ParamField>
+  
+  <ParamField body="data.line" type="string" required>
+    Street address line
+  </ParamField>
+  
+  <ParamField body="data.zip_code" type="string" required>
+    Postal/ZIP code
+  </ParamField>
+  
+  <ParamField body="data.commercial_name" type="string">
+    Commercial or display name
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success, 400 for error)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="data.uid" type="string">
+    Unique identifier for the created user (present on success)
+  </ResponseField>
+  
+  <ResponseField name="data.error" type="object">
+    Error details (present on failure)
+  </ResponseField>
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/create_staff \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "name": "Jane Doe",
+      "email": "jane.doe@company.com",
+      "password": "SecurePass123!",
+      "phone": "+1-555-0155",
+      "status": true,
+      "account_type": "admin",
+      "id": "555123456",
+      "id_type": "DRIVER_LICENSE",
+      "city": "San Francisco",
+      "country": "USA",
+      "line": "789 Admin Blvd",
+      "zip_code": "94102",
+      "commercial_name": "Jane D."
+    }
+  }'
+```
+
+```javascript JavaScript
+const createStaff = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/create_staff',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          name: 'Jane Doe',
+          email: 'jane.doe@company.com',
+          password: 'SecurePass123!',
+          phone: '+1-555-0155',
+          status: true,
+          account_type: 'admin',
+          id: '555123456',
+          id_type: 'DRIVER_LICENSE',
+          city: 'San Francisco',
+          country: 'USA',
+          line: '789 Admin Blvd',
+          zip_code: '94102',
+          commercial_name: 'Jane D.'
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Success Response
+{
+  "message": "Ingresado con el ID: ghi789rst012.",
+  "status": 200,
+  "data": {
+    "uid": "ghi789rst012"
+  }
+}
+```
+
+```json Error Response
+{
+  "message": "Error creando nuevo usuario:",
+  "status": 400,
+  "data": {
+    "error": {
+      "code": "auth/email-already-exists",
+      "message": "The email address is already in use by another account."
+    }
+  }
+}
+```
+
+</ResponseExample>
+
+## Error Codes
+
+| Status Code | Description |
+| --- | --- |
+| 200 | Staff member successfully created |
+| 400 | Error creating user (email already exists, invalid data, etc.) |
+
+<Note>
+  - The staff member is created in both Firebase Authentication and the `u_staff` Firestore collection
+  - Two-factor authentication is disabled by default (can be enabled later)
+  - Email addresses must be unique across the system
+  - The `date.create` field is automatically set to the current timestamp
+  - Staff accounts have administrative privileges and access to platform management features
+  - The `security_2fa` object is initialized with `status: false` and `type: "email"`
+</Note>

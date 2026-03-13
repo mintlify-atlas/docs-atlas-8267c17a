@@ -1,0 +1,553 @@
+---
+title: 'Event Setup'
+description: 'Create events, configure zones, and set up seating arrangements for your ticketed events'
+icon: 'calendar-days'
+---
+
+Event setup is the foundation of the TMT ticketing system. This guide walks you through creating events, configuring zones with different pricing tiers, and setting up seating arrangements.
+
+## Event Lifecycle
+
+Events in TMT go through several status states:
+
+1. **Instantiated** - Event is created
+2. **Active** - Event is open for ticket sales
+3. **In Progress** - Event is currently happening
+4. **Finished** - Event has concluded
+5. **Cancelled** - Event was cancelled
+
+## Creating an Event
+
+Before generating tickets, you need to create an event with all necessary details.
+
+<Steps>
+  <Step title="Create Event Document">
+    Create a new event document in the `events` collection with basic information.
+  </Step>
+  
+  <Step title="Configure Zones">
+    Set up different seating zones with pricing and capacity.
+  </Step>
+  
+  <Step title="Set Up Financial Structure">
+    Configure fixed and variable costs for the event.
+  </Step>
+  
+  <Step title="Activate Event">
+    Change event status to "Active" to enable ticket sales.
+  </Step>
+</Steps>
+
+## Event Structure
+
+### Basic Event Data
+
+```json
+{
+  "event_id": "evt_2024_concert_001",
+  "event": {
+    "name": "Summer Music Festival 2024",
+    "description": "Annual outdoor music festival featuring top artists",
+    "media": {
+      "poster": "https://storage.example.com/posters/summer-fest.jpg",
+      "banner": "https://storage.example.com/banners/summer-fest-wide.jpg",
+      "thumbnail": "https://storage.example.com/thumbs/summer-fest-thumb.jpg"
+    }
+  },
+  "client_id": "client_abc123",
+  "client_name": "Acme Entertainment",
+  "date_start": "2024-07-15T18:00:00Z",
+  "date_end": "2024-07-15T23:59:00Z",
+  "status": "Activo",
+  "type": "concert",
+  "type_metadata": {
+    "genre": "multi-genre",
+    "artists": ["Artist A", "Artist B", "Artist C"],
+    "age_restriction": "18+"
+  },
+  "venue": {
+    "name": "Central Park Amphitheater",
+    "address": "Central Park, New York",
+    "capacity": 5000,
+    "coordinates": {
+      "lat": 40.7829,
+      "lng": -73.9654
+    }
+  },
+  "date": {
+    "created": "2024-03-01T10:00:00Z",
+    "updated": "2024-03-10T15:30:00Z"
+  }
+}
+```
+
+## Zone Configuration
+
+Zones allow you to create different ticket categories with varying prices and capacities.
+
+### Setting Up Zones
+
+Create a `setup/zones` document under your event:
+
+<CodeGroup>
+```javascript Node.js
+const zonesConfig = {
+  event_id: "evt_2024_concert_001",
+  status: true,
+  seats_allocated: 5000,
+  zone: [
+    {
+      id: "vip",
+      name: "VIP",
+      description: "Premium seating with exclusive amenities",
+      color: "#FFD700",
+      seats: 500,
+      price: 150.00,
+      currency: "USD",
+      benefits: [
+        "Front row seating",
+        "Backstage pass",
+        "Meet & greet",
+        "Free drinks"
+      ]
+    },
+    {
+      id: "general",
+      name: "General Admission",
+      description: "Standard admission to the event",
+      color: "#4169E1",
+      seats: 3500,
+      price: 75.00,
+      currency: "USD",
+      benefits: ["Access to main area"]
+    },
+    {
+      id: "balcony",
+      name: "Balcony",
+      description: "Elevated seating with great views",
+      color: "#32CD32",
+      seats: 1000,
+      price: 50.00,
+      currency: "USD",
+      benefits: [
+        "Elevated view",
+        "Reserved seating"
+      ]
+    }
+  ]
+};
+
+// Write to Firestore
+await db.collection('events')
+  .doc('evt_2024_concert_001')
+  .collection('setup')
+  .doc('zones')
+  .set(zonesConfig);
+```
+
+```python Python
+import firebase_admin
+from firebase_admin import firestore
+
+db = firestore.client()
+
+zones_config = {
+    "event_id": "evt_2024_concert_001",
+    "status": True,
+    "seats_allocated": 5000,
+    "zone": [
+        {
+            "id": "vip",
+            "name": "VIP",
+            "description": "Premium seating with exclusive amenities",
+            "color": "#FFD700",
+            "seats": 500,
+            "price": 150.00,
+            "currency": "USD"
+        },
+        {
+            "id": "general",
+            "name": "General Admission",
+            "color": "#4169E1",
+            "seats": 3500,
+            "price": 75.00,
+            "currency": "USD"
+        }
+    ]
+}
+
+db.collection('events').document('evt_2024_concert_001').collection('setup').document('zones').set(zones_config)
+```
+</CodeGroup>
+
+<Tip>
+Use distinct colors for each zone to make it easy for customers to identify their ticket category in your UI.
+</Tip>
+
+## Financial Configuration
+
+Set up the cost structure for your event to enable proper revenue splitting.
+
+### Fixed Costs
+
+Fixed costs are one-time expenses that must be covered before variable costs:
+
+```json
+{
+  "fixed_cost_balance": 10000.00,
+  "fixed_cost_collected": 0.00,
+  "costs_fixed": [
+    {
+      "name": "Venue Rental",
+      "value_total": 5000.00,
+      "entity": "TMT"
+    },
+    {
+      "name": "Equipment Rental",
+      "value_total": 3000.00,
+      "entity": "TMT"
+    },
+    {
+      "name": "Insurance",
+      "value_total": 2000.00,
+      "entity": "TMT"
+    }
+  ]
+}
+```
+
+### Variable Costs
+
+Variable costs are percentage-based and split between TMT and the client:
+
+```json
+{
+  "costs_variables": [
+    {
+      "name": "Platform Fee",
+      "value": 10,
+      "entity": "TMT",
+      "description": "TMT service fee"
+    },
+    {
+      "name": "Payment Processing",
+      "value": 3,
+      "entity": "TMT",
+      "description": "Credit card and payment gateway fees"
+    },
+    {
+      "name": "Revenue Share",
+      "value": 87,
+      "entity": "Cliente",
+      "description": "Client's share of revenue"
+    }
+  ]
+}
+```
+
+### Complete Financial Setup
+
+<CodeGroup>
+```javascript Create Financial Config
+const financialConfig = {
+  fixed_cost_balance: 10000.00,
+  fixed_cost_collected: 0.00,
+  costs_fixed: [
+    {
+      name: "Venue Rental",
+      value_total: 5000.00,
+      entity: "TMT"
+    },
+    {
+      name: "Equipment Rental",
+      value_total: 3000.00,
+      entity: "TMT"
+    },
+    {
+      name: "Insurance",
+      value_total: 2000.00,
+      entity: "TMT"
+    }
+  ],
+  costs_variables: [
+    {
+      name: "Platform Fee",
+      value: 10,
+      entity: "TMT"
+    },
+    {
+      name: "Payment Processing",
+      value: 3,
+      entity: "TMT"
+    },
+    {
+      name: "Revenue Share",
+      value: 87,
+      entity: "Cliente"
+    }
+  ],
+  date: {
+    created: new Date(),
+    updated: ""
+  }
+};
+
+await db.collection('events')
+  .doc('evt_2024_concert_001')
+  .collection('setup')
+  .doc('financial')
+  .set(financialConfig);
+```
+
+```python Python
+financial_config = {
+    "fixed_cost_balance": 10000.00,
+    "fixed_cost_collected": 0.00,
+    "costs_fixed": [
+        {"name": "Venue Rental", "value_total": 5000.00, "entity": "TMT"},
+        {"name": "Equipment Rental", "value_total": 3000.00, "entity": "TMT"},
+        {"name": "Insurance", "value_total": 2000.00, "entity": "TMT"}
+    ],
+    "costs_variables": [
+        {"name": "Platform Fee", "value": 10, "entity": "TMT"},
+        {"name": "Payment Processing", "value": 3, "entity": "TMT"},
+        {"name": "Revenue Share", "value": 87, "entity": "Cliente"}
+    ]
+}
+
+db.collection('events').document('evt_2024_concert_001').collection('setup').document('financial').set(financial_config)
+```
+</CodeGroup>
+
+<Warning>
+Ensure that variable cost percentages for all entities sum to 100%. The system uses these percentages to split revenue after fixed costs are covered.
+</Warning>
+
+## Seating Configuration
+
+For events with assigned seating, you can configure specific seat layouts.
+
+### Row and Seat Assignment
+
+```json
+{
+  "zone_id": "vip",
+  "seating_layout": {
+    "rows": [
+      {
+        "row_id": "A",
+        "seats": [
+          {"seat_number": 1, "status": "available"},
+          {"seat_number": 2, "status": "available"},
+          {"seat_number": 3, "status": "available"}
+        ]
+      },
+      {
+        "row_id": "B",
+        "seats": [
+          {"seat_number": 1, "status": "available"},
+          {"seat_number": 2, "status": "available"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Event Status Management
+
+Update event status as it progresses through its lifecycle:
+
+<CodeGroup>
+```javascript Activate Event
+await db.collection('events')
+  .doc('evt_2024_concert_001')
+  .update({
+    status: 'Activo',
+    'date.updated': admin.firestore.Timestamp.now()
+  });
+```
+
+```javascript Start Event
+await db.collection('events')
+  .doc('evt_2024_concert_001')
+  .update({
+    status: 'En Progreso',
+    'date.updated': admin.firestore.Timestamp.now()
+  });
+```
+
+```javascript Finish Event
+await db.collection('events')
+  .doc('evt_2024_concert_001')
+  .update({
+    status: 'Finalizado',
+    'date.updated': admin.firestore.Timestamp.now()
+  });
+```
+
+```javascript Cancel Event
+await db.collection('events')
+  .doc('evt_2024_concert_001')
+  .update({
+    status: 'Cancelado',
+    'date.updated': admin.firestore.Timestamp.now()
+  });
+```
+</CodeGroup>
+
+## Automatic Status Updates
+
+The system can automatically update event status based on dates:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/update_events_status',
+  {}
+);
+```
+
+This endpoint checks all events and:
+- Changes events with `date_end` in the past from "Activo" to "Finalizado"
+- Runs periodically to keep event statuses current
+
+## Security and PIN Configuration
+
+Set up security pins for event access control:
+
+```javascript
+const securityConfig = {
+  data: {
+    qr_pin: "ABC123XYZ",
+    access_pin: "9876"
+  }
+};
+
+await db.collection('events')
+  .doc('evt_2024_concert_001')
+  .collection('security')
+  .doc('qr-pin')
+  .set(securityConfig);
+```
+
+### Retrieve Event PIN
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/helpers_event_pin',
+  {
+    data: {
+      event_id: "evt_2024_concert_001"
+    }
+  }
+);
+```
+
+## Checkpoint Configuration
+
+For events with access control, set up checkpoints for collaborators:
+
+```json
+{
+  "event_id": "evt_2024_concert_001",
+  "name": "Main Entrance",
+  "type": "entry",
+  "status": "Activo",
+  "date_start": "2024-07-15T17:00:00Z",
+  "date_end": "2024-07-16T01:00:00Z"
+}
+```
+
+## Complete Event Setup Example
+
+Here's a complete workflow to set up an event:
+
+```javascript
+const setupEvent = async (eventData) => {
+  const eventId = 'evt_2024_concert_001';
+  
+  // 1. Create main event document
+  await db.collection('events').doc(eventId).set({
+    event: {
+      name: eventData.name,
+      description: eventData.description
+    },
+    client_id: eventData.clientId,
+    client_name: eventData.clientName,
+    date_start: eventData.dateStart,
+    date_end: eventData.dateEnd,
+    status: 'Instantiated',
+    type: eventData.type,
+    date: {
+      created: admin.firestore.Timestamp.now(),
+      updated: ''
+    }
+  });
+  
+  // 2. Configure zones
+  await db.collection('events').doc(eventId)
+    .collection('setup').doc('zones').set({
+      status: true,
+      seats_allocated: eventData.totalSeats,
+      zone: eventData.zones
+    });
+  
+  // 3. Configure financial structure
+  await db.collection('events').doc(eventId)
+    .collection('setup').doc('financial').set({
+      fixed_cost_balance: eventData.fixedCosts,
+      fixed_cost_collected: 0,
+      costs_fixed: eventData.fixedCostItems,
+      costs_variables: eventData.variableCosts
+    });
+  
+  // 4. Set up security
+  await db.collection('events').doc(eventId)
+    .collection('security').doc('qr-pin').set({
+      data: {
+        qr_pin: generatePin(),
+        access_pin: generateAccessPin()
+      }
+    });
+  
+  // 5. Activate event
+  await db.collection('events').doc(eventId).update({
+    status: 'Activo',
+    'date.updated': admin.firestore.Timestamp.now()
+  });
+  
+  return eventId;
+};
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Plan Capacity" icon="users">
+    Calculate total capacity carefully across all zones to match venue limits.
+  </Card>
+  
+  <Card title="Price Strategically" icon="dollar-sign">
+    Use zone pricing to create value tiers that appeal to different customer segments.
+  </Card>
+  
+  <Card title="Test Configuration" icon="flask">
+    Create test events to verify zone setup and pricing before launching.
+  </Card>
+  
+  <Card title="Monitor Fixed Costs" icon="chart-line">
+    Track fixed cost collection to understand when variable revenue starts.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Generate Tickets" icon="ticket" href="/guides/ticket-generation">
+    Create tickets for your configured event
+  </Card>
+  
+  <Card title="Access Control" icon="door-open" href="/guides/access-control">
+    Set up entry and exit tracking
+  </Card>
+</CardGroup>

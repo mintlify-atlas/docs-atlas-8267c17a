@@ -1,0 +1,345 @@
+---
+title: 'Exchange Rates'
+api: 'Multiple endpoints'
+description: 'Manage currency exchange rates for multi-currency operations'
+---
+
+## Overview
+
+The TMT API provides endpoints to manage exchange rates between Venezuelan Bolívar (VEF/BSD) and foreign currencies (USD, EUR). Exchange rates can be updated automatically from Banco Central de Venezuela (BCV) or set manually.
+
+## Automatic Exchange Rate Update
+
+### Endpoint
+`POST /exchange_rate`
+
+### Description
+Automatically fetch current exchange rates from Banco Central de Venezuela (BCV) website and update the system.
+
+### Request Body
+No parameters required (can send empty body or `{}`)
+
+### Response
+
+<ResponseField name="result" type="string">
+  Success message indicating rates were updated
+</ResponseField>
+
+### Data Source
+- **Source**: http://www.bcv.org.ve
+- **Method**: Web scraping using @extractus/article-extractor
+- **Update Type**: "automatico"
+
+### Exchange Rate Data Structure
+
+<ResponseField name="rates" type="object">
+  Exchange rates object
+  
+  <ResponseField name="bs" type="number">
+    Base currency (always 1)
+  </ResponseField>
+  
+  <ResponseField name="eur" type="number">
+    EUR to VEF/BSD exchange rate
+  </ResponseField>
+  
+  <ResponseField name="usd" type="number">
+    USD to VEF/BSD exchange rate
+  </ResponseField>
+</ResponseField>
+
+### Firestore Storage
+
+Updates are stored in two locations:
+
+1. **Current Rate**: `/data/exchange_rates`
+   - Latest active exchange rate
+   - Used by all transactions
+
+2. **History**: `/data/exchange_rates/history/{id}`
+   - Historical record of all updates
+   - Includes timestamp and update type
+
+### Example Request
+
+```bash
+curl -X POST https://your-api.com/exchange_rate
+```
+
+### Example Response
+
+```json
+{
+  "result": "Actualizado . Ingresado"
+}
+```
+
+### Example Data Stored
+
+```json
+{
+  "last_update_type": "automatico",
+  "rates": {
+    "bs": 1,
+    "eur": 39.8456,
+    "usd": 36.5000
+  },
+  "date": {
+    "last_update": "2026-03-13T18:30:00.000Z"
+  }
+}
+```
+
+---
+
+## Manual Exchange Rate Update
+
+### Endpoint
+`POST /exchange_rate_manual`
+
+### Description
+Manually set exchange rates for EUR and USD.
+
+### Request Body
+
+<ParamField body="params" type="object" required>
+  Exchange rate parameters
+  
+  <ParamField body="eur" type="number" required>
+    EUR to VEF/BSD exchange rate
+  </ParamField>
+  
+  <ParamField body="usd" type="number" required>
+    USD to VEF/BSD exchange rate
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="result" type="string">
+  Success message with document IDs
+</ResponseField>
+
+### Update Type
+- **Type**: "manual"
+- **Use Case**: When automatic scraping fails or custom rates needed
+
+### Example Request
+
+```json
+{
+  "params": {
+    "eur": 39.85,
+    "usd": 36.50
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "result": "act con el ID: undefined . Ingresado con el ID: abc123xyz789 ."
+}
+```
+
+### Example Data Stored
+
+```json
+{
+  "last_update_type": "manual",
+  "rates": {
+    "bs": 1,
+    "eur": 39.85,
+    "usd": 36.50
+  },
+  "date": {
+    "last_update": "2026-03-13T19:00:00.000Z"
+  }
+}
+```
+
+---
+
+## Reading Exchange Rates
+
+### Firestore Path
+`/data/exchange_rates`
+
+### Document Structure
+
+```javascript
+{
+  last_update_type: "automatico" | "manual",
+  rates: {
+    bs: 1,
+    eur: number,
+    usd: number
+  },
+  date: {
+    last_update: Timestamp
+  }
+}
+```
+
+### Usage in Code
+
+```javascript
+const exchangeRateRef = db.collection('data').doc('exchange_rates');
+const exchangeRateDoc = await exchangeRateRef.get();
+
+if (exchangeRateDoc.exists) {
+  const exchangeRate = exchangeRateDoc.data().rates.usd;
+  const amountInBSD = amountInUSD * exchangeRate;
+}
+```
+
+---
+
+## Exchange Rate History
+
+### Firestore Path
+`/data/exchange_rates/history/{document_id}`
+
+### History Document Structure
+
+```javascript
+{
+  last_update_type: "automatico" | "manual",
+  rates: {
+    bs: 1,
+    eur: number,
+    usd: number
+  },
+  date: {
+    last_update: Timestamp
+  }
+}
+```
+
+### Querying History
+
+```javascript
+const historyRef = db.collection('data')
+  .doc('exchange_rates')
+  .collection('history')
+  .orderBy('date.last_update', 'desc')
+  .limit(10);
+
+const history = await historyRef.get();
+history.forEach(doc => {
+  console.log(doc.data());
+});
+```
+
+---
+
+## Use Cases
+
+### Automatic Updates
+- **Daily Sync**: Scheduled job to update rates daily
+- **Real-time Pricing**: Keep product prices current
+- **Compliance**: Use official BCV rates
+
+### Manual Updates
+- **BCV Website Down**: Fallback when scraping fails
+- **Custom Rates**: Special promotional rates
+- **Future Rates**: Pre-set rates for future dates
+- **Testing**: Set specific rates for testing
+
+### Multi-Currency Operations
+- **Ticket Pricing**: Convert USD prices to VEF
+- **Payment Processing**: Handle both currencies
+- **Reporting**: Show amounts in both currencies
+- **Billing**: Invoice generation with conversion
+
+---
+
+## Integration Examples
+
+### Order Processing
+
+```javascript
+// Get current exchange rate
+const rateDoc = await db.collection('data')
+  .doc('exchange_rates').get();
+const usdRate = rateDoc.data().rates.usd;
+
+// Convert ticket price
+const ticketPriceUSD = 50.00;
+const ticketPriceBSD = ticketPriceUSD * usdRate; // 50 * 36.50 = 1825.00
+
+// Store both values
+await orderRef.set({
+  amount_usd: ticketPriceUSD,
+  amount_bsd: ticketPriceBSD,
+  exchange_rate: usdRate,
+  ...
+});
+```
+
+### Billing with Conversion
+
+```javascript
+// Used in billing.js generateBillingDataFromOrder()
+const subtotalUSD = 100.00;
+const ivaUSD = subtotalUSD * 0.16; // 16.00
+const totalUSD = subtotalUSD + ivaUSD; // 116.00
+
+// Convert to BSD using exchange rate
+const exchangeRate = 36.50;
+const subtotalBSD = truncateDecimals(subtotalUSD * exchangeRate, 2); // 3650.00
+const ivaBSD = truncateDecimals(ivaUSD * exchangeRate, 2); // 584.00
+const totalBSD = truncateDecimals(subtotalBSD + ivaBSD, 2); // 4234.00
+```
+
+---
+
+## Best Practices
+
+1. **Regular Updates**: Run automatic updates daily
+2. **Fallback**: Have manual update ready if automatic fails
+3. **History**: Always save to history for audit trail
+4. **Validation**: Verify rates are reasonable before applying
+5. **Notification**: Alert admins when rates change significantly
+6. **Caching**: Cache rates to avoid frequent Firestore reads
+7. **Precision**: Use appropriate decimal precision (2-4 decimals)
+
+---
+
+## Error Handling
+
+### Automatic Update Errors
+
+```javascript
+try {
+  // Attempt automatic update
+  const article = await extract('http://www.bcv.org.ve');
+  // Parse rates...
+} catch (error) {
+  console.error('BCV scraping failed:', error);
+  // Option 1: Use last known rate
+  // Option 2: Trigger manual update alert
+  // Option 3: Use backup rate source
+}
+```
+
+### Manual Update Validation
+
+```javascript
+if (params.usd < 1 || params.usd > 1000) {
+  throw new Error('USD rate out of reasonable range');
+}
+if (params.eur < 1 || params.eur > 1000) {
+  throw new Error('EUR rate out of reasonable range');
+}
+```
+
+---
+
+## Related Endpoints
+
+- `process_order_billing` - Uses exchange rates for invoice generation
+- `billing_emision` - Multi-currency billing
+- `order_created` - Stores exchange rate with orders
+- `money_distribution` - Multi-currency revenue tracking

@@ -1,0 +1,280 @@
+---
+title: 'Office Validation'
+api: 'POST /office_validate'
+description: 'Validate office access and collaborator permissions using PIN authentication'
+---
+
+## Overview
+
+The office validation system ensures that only authorized collaborators can access specific ticket offices (physical or virtual points of sale). This endpoint validates a PIN code against an office's security settings and verifies the collaborator's active status.
+
+## Office Types in TMT
+
+TMT supports three types of offices:
+
+### Physical Office
+Traditional box office location with on-site staff:
+- Requires PIN authentication for access
+- Collaborators must be explicitly assigned
+- Real-time ticket sales and management
+- Direct customer interaction
+
+### Virtual Office
+Online ticket sales platform:
+- Web-based ticket purchasing
+- No physical location
+- Automated ticket delivery
+- Real-time inventory management
+- See [Virtual Office API](/api/offices/virtual-office) for details
+
+### Offline Office
+Box office that can operate without internet connectivity:
+- Tickets pre-assigned to the office
+- Sales recorded locally
+- Synchronization when connection restored
+- Prevents overselling through pre-allocation
+- See [Offline Office API](/api/offices/offline-office) for details
+
+---
+
+## Validate Office Access
+
+### Endpoint
+`POST /office_validate`
+
+### Description
+Validates a collaborator's access to an office using PIN authentication. Checks both the collaborator's active status and the validity of the PIN code.
+
+### Request
+
+<ParamField body="idoffice" type="string" required>
+  The unique identifier of the office to access.
+</ParamField>
+
+<ParamField body="pin" type="string" required>
+  The PIN code for office authentication. This is a shared secret for the office, not user-specific.
+</ParamField>
+
+<ParamField body="idcollaborators" type="string" required>
+  The unique identifier of the collaborator attempting to access the office.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message indicating the validation result:
+  - "Oficce allowed" - Access granted
+  - "Oficce not allowed" - Invalid PIN
+  - "Usuario no activo en la taquilla" - Collaborator inactive
+  - "Usuario no asociado con la taquilla" - Collaborator not assigned to office
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code:
+  - `200` - Access granted
+  - `400` - Access denied
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    `true` if access is granted, `false` otherwise.
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "idoffice": "office-123",
+    "pin": "1234",
+    "idcollaborators": "collab-456"
+  }
+}
+```
+
+### Example Response (Success)
+
+```json
+{
+  "message": "Oficce allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+### Example Response (Invalid PIN)
+
+```json
+{
+  "message": "Oficce not allowed",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+### Example Response (Inactive Collaborator)
+
+```json
+{
+  "message": "Usuario no activo en la taquilla",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+---
+
+## Set Office PIN
+
+### Endpoint
+`POST /office_pin_set`
+
+### Description
+Set or update the PIN code for an office. This is an administrative function that should be restricted to managers.
+
+### Request
+
+<ParamField body="idoffice" type="string" required>
+  The unique identifier of the office.
+</ParamField>
+
+<ParamField body="pin" type="string" required>
+  The new PIN code to set for the office. Should be numeric and of appropriate length (typically 4-6 digits).
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message:
+  - "Office: Pin Seteado!" - PIN successfully set
+  - "Office: Error al crear" - Error setting PIN
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code:
+  - `200` - PIN set successfully
+  - `400` - Error setting PIN
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    `true` if PIN was set successfully, `false` otherwise.
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "idoffice": "office-123",
+    "pin": "5678"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Office: Pin Seteado!",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+---
+
+## Security Considerations
+
+### PIN Management
+- PINs are stored in Firestore under `offices/{officeId}/security/access_pin`
+- Each successful validation updates the `date.updated` timestamp
+- PINs should be changed regularly and kept confidential
+- Consider implementing rate limiting to prevent brute force attacks
+
+### Access Control Flow
+
+1. **Collaborator Check**: Verify collaborator exists and is assigned to office
+2. **Status Check**: Verify collaborator's active status
+3. **PIN Validation**: Compare provided PIN with stored value
+4. **Timestamp Update**: Record access time on success
+
+### Best Practices
+
+- Implement session management after successful validation
+- Log all validation attempts for audit purposes
+- Use HTTPS to protect PIN transmission
+- Consider two-factor authentication for sensitive operations
+- Implement PIN complexity requirements
+- Set up alerts for repeated failed attempts
+
+---
+
+## Data Structure
+
+### Office Security Document
+
+```javascript
+// Firestore path: offices/{officeId}/security/access_pin
+{
+  pin: "1234",
+  date: {
+    created: Timestamp,
+    updated: Timestamp
+  }
+}
+```
+
+### Collaborator Document
+
+```javascript
+// Firestore path: offices/{officeId}/collaborators/{collaboratorId}
+{
+  name: "John Doe",
+  email: "john@example.com",
+  status: true,  // Active status
+  role: "cashier",
+  created: Timestamp
+}
+```
+
+---
+
+## Implementation Details
+
+- Uses Firebase Admin SDK for Firestore access
+- CORS-enabled for cross-origin requests
+- Timestamps use Firebase server time for consistency
+- Validation performs real-time database queries
+- Security document is created/updated atomically
+
+## Error Scenarios
+
+Handle these common error cases:
+
+1. **Office not found**: Office ID doesn't exist
+2. **Collaborator not found**: Invalid collaborator ID
+3. **Collaborator not assigned**: Collaborator exists but not linked to office
+4. **Inactive collaborator**: Collaborator status is false
+5. **Invalid PIN**: PIN doesn't match stored value
+6. **Database error**: Connection or permission issues
+
+## Related Endpoints
+
+- [Virtual Office](/api/offices/virtual-office) - Online ticket sales
+- [Offline Office](/api/offices/offline-office) - Offline operations
+- Create Event - Event creation and management
+
+## Source Reference
+
+Implementation: `/home/daytona/workspace/source/functions/offices/office_validate.js`

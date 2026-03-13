@@ -1,0 +1,473 @@
+---
+title: 'Virtual Office'
+api: 'POST Multiple Endpoints'
+description: 'Manage online ticket sales and virtual seat reservations'
+---
+
+## Overview
+
+The Virtual Office system enables online ticket sales without physical office locations. It provides real-time seat locking, inventory management, and automated ticket distribution. Unlike [Offline Offices](/api/offices/offline-office), virtual offices operate exclusively online and require continuous internet connectivity.
+
+## Office Type: Virtual
+
+Virtual offices are characterized by:
+- **Real-time operations**: All transactions happen immediately
+- **No physical location**: Entirely web-based
+- **Temporary locks**: Seats are temporarily locked during checkout
+- **Automatic releases**: Locks expire if checkout isn't completed
+- **Direct database access**: Uses PostgreSQL for high-performance queries
+
+---
+
+## List Event Tickets
+
+### Endpoint
+`POST /tickets_list_event_virtual`
+
+### Description
+Retrieve all tickets for a specific event from the PostgreSQL database.
+
+### Request
+
+<ParamField body="event_id" type="string" required>
+  The unique identifier of the event.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message:
+  - "Evento Encontrado" - Event found
+  - "Evento no Encontrado" - Event not found
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success, 400 if not found)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    Indicates if event was found.
+  </ResponseField>
+  
+  <ResponseField name="response" type="array">
+    Array of ticket objects, each containing:
+    - `id`: Ticket database ID
+    - `ticket_id`: Unique ticket identifier
+    - `event_id`: Associated event ID
+    - `seat_id`: Seat/section identifier
+    - `seat_row`: Row number (if applicable)
+    - `zone`: Seating zone
+    - `color`: Color code for zone
+    - `status`: Availability status
+    - `ledger`: Transaction history array
+    - `date_created`: Creation timestamp
+    - `date_updated`: Last update timestamp
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "event-2026-concert"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Evento Encontrado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": [
+      {
+        "id": "event-2026-concert-001",
+        "ticket_id": "event-2026-concert-001",
+        "event_id": "event-2026-concert",
+        "event_name": "Summer Concert 2026",
+        "seat_id": "A-1",
+        "seat_row": "A",
+        "zone": "VIP",
+        "color": "#FFD700",
+        "status": true,
+        "ledger": [],
+        "date_created": "2026-03-13T10:00:00Z",
+        "date_updated": "2026-03-13T10:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Lock Tickets (Hold for Checkout)
+
+### Endpoint
+`POST /tickets_lock_virtual`
+
+### Description
+Temporarily lock tickets during customer checkout. Locked tickets cannot be purchased by other customers until the lock expires or is released.
+
+### Request
+
+<ParamField body="ticketd_reserved" type="array" required>
+  Array of ticket IDs to lock.
+</ParamField>
+
+<ParamField body="reserved_time" type="number" required>
+  Lock duration in seconds (e.g., 600 for 10 minutes).
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message:
+  - "Tickets blocked" - Successfully locked
+  - "Tickets no disponibles" - Some tickets unavailable
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success, 400 if unavailable)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    Indicates if locking was successful.
+  </ResponseField>
+  
+  <ResponseField name="tickets" type="array">
+    Array of successfully locked ticket IDs.
+  </ResponseField>
+  
+  <ResponseField name="nodisponible" type="array">
+    Array of ticket IDs that were unavailable (if any).
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "ticketd_reserved": [
+      "event-2026-concert-001",
+      "event-2026-concert-002",
+      "event-2026-concert-003"
+    ],
+    "reserved_time": 600
+  }
+}
+```
+
+### Example Response (Success)
+
+```json
+{
+  "message": "Tickets blocked",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": [
+      "event-2026-concert-001",
+      "event-2026-concert-002",
+      "event-2026-concert-003"
+    ]
+  }
+}
+```
+
+### Example Response (Some Unavailable)
+
+```json
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": [
+      "event-2026-concert-002"
+    ]
+  }
+}
+```
+
+---
+
+## List Tickets with Lock Status
+
+### Endpoint
+`POST /tickets_list_event_sales_virtual`
+
+### Description
+Retrieve all tickets for an event with their current lock status. Useful for displaying real-time seat availability.
+
+### Request
+
+<ParamField body="event_id" type="string" required>
+  The unique identifier of the event.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message indicating result.
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success, 400 if not found)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="response" type="array">
+    Array of ticket objects with additional fields:
+    - `status`: Computed availability (considers locks)
+    - `status_real`: Actual database status
+    - `status_offline`: Whether assigned to offline office
+    - All standard ticket fields
+  </ResponseField>
+</ResponseField>
+
+### Status Logic
+
+```javascript
+// Status computation:
+CASE 
+  WHEN status_d THEN false       // Locked by another user
+  WHEN status THEN true           // Available
+  ELSE false                      // Sold or unavailable
+END status
+```
+
+### Example Response
+
+```json
+{
+  "message": "Evento Encontrado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": [
+      {
+        "id": "event-2026-concert-001",
+        "ticket_id": "event-2026-concert-001",
+        "event_id": "event-2026-concert",
+        "seat_id": "A-1",
+        "zone": "VIP",
+        "status": true,
+        "status_real": true,
+        "status_offline": false,
+        "ledger": []
+      },
+      {
+        "id": "event-2026-concert-002",
+        "ticket_id": "event-2026-concert-002",
+        "event_id": "event-2026-concert",
+        "seat_id": "A-2",
+        "zone": "VIP",
+        "status": false,
+        "status_real": true,
+        "status_offline": false,
+        "ledger": [{"action": "locked", "date": "2026-03-13T10:30:00Z"}]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Unlock Tickets
+
+### Endpoint
+`POST /tickets_unlock_param_virtual`
+
+### Description
+Release locked tickets, making them available for other customers. Called when checkout is cancelled or times out.
+
+### Request
+
+<ParamField body="ticketd_reserved" type="array" required>
+  Array of ticket IDs to unlock.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Actualizado" on success.
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    Always `true` on successful unlock.
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "ticketd_reserved": [
+      "event-2026-concert-001",
+      "event-2026-concert-002"
+    ]
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Actualizado",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+---
+
+## Virtual Office Workflow
+
+A typical virtual office transaction follows these steps:
+
+### 1. Customer Browses Available Seats
+```javascript
+// Call: tickets_list_event_sales_virtual
+// Display: Available seats (status: true)
+```
+
+### 2. Customer Selects Seats
+```javascript
+// Call: tickets_lock_virtual
+// Duration: 600 seconds (10 minutes)
+// UI: Show countdown timer
+```
+
+### 3. Customer Completes Checkout
+```javascript
+// Payment processing...
+// If successful: Confirm purchase (mark as sold)
+// If failed/cancelled: tickets_unlock_param_virtual
+```
+
+### 4. Lock Expiration (Automatic)
+```javascript
+// After 600 seconds:
+// Database automatically marks locks as expired
+// Tickets become available again
+// No API call needed
+```
+
+---
+
+## Lock Management Best Practices
+
+### Recommended Lock Duration
+- **Express checkout**: 3-5 minutes (180-300 seconds)
+- **Standard checkout**: 10 minutes (600 seconds)
+- **Complex forms**: 15 minutes (900 seconds)
+
+### Client-Side Considerations
+```javascript
+// Display countdown timer
+const lockExpiry = Date.now() + (reserved_time * 1000);
+
+// Warn user before expiration
+if (timeRemaining < 120) { // 2 minutes
+  showWarning("Your reservation expires soon!");
+}
+
+// Handle expiration
+if (timeRemaining <= 0) {
+  releaseSeats();
+  redirectToSeatSelection();
+}
+```
+
+### Server-Side Lock Cleanup
+Implement a scheduled job to clean expired locks:
+```sql
+DELETE FROM tickets_blocked 
+WHERE locked_up < NOW();
+```
+
+---
+
+## Database Schema
+
+### Tickets Table
+```sql
+CREATE TABLE tickets (
+  id VARCHAR PRIMARY KEY,
+  ticket_id VARCHAR UNIQUE,
+  event_id VARCHAR,
+  seat_id VARCHAR,
+  seat_row VARCHAR,
+  zone VARCHAR,
+  color VARCHAR,
+  status BOOLEAN,
+  status_offline BOOLEAN,
+  ledger JSONB,
+  date_created TIMESTAMP,
+  date_updated TIMESTAMP
+);
+```
+
+### Tickets Blocked Table
+```sql
+CREATE TABLE tickets_blocked (
+  ticket_id VARCHAR PRIMARY KEY,
+  locked_up TIMESTAMP,
+  date_created TIMESTAMP
+);
+```
+
+---
+
+## Implementation Details
+
+- **Database**: PostgreSQL for high-performance concurrent access
+- **Lock mechanism**: Separate `tickets_blocked` table for efficient queries
+- **CORS**: Enabled for web client access
+- **Timestamps**: Moment.js for consistent date formatting
+- **Atomicity**: Uses database transactions to prevent race conditions
+
+## Error Handling
+
+Handle these scenarios:
+
+1. **Tickets already locked**: Show alternative seats
+2. **Lock expired during checkout**: Prompt customer to reselect
+3. **Database unavailable**: Show maintenance message
+4. **Concurrent lock attempts**: First request wins
+
+## Performance Optimization
+
+- Index `event_id` for fast event queries
+- Index `ticket_id` in `tickets_blocked` for lock checks
+- Use connection pooling for PostgreSQL
+- Implement caching for event ticket lists
+- Consider Redis for high-traffic lock management
+
+## Related Endpoints
+
+- [Offline Office](/api/offices/offline-office) - Offline ticket management
+- [Office Validation](/api/offices/office-validate) - Access control
+- [Hold & Release Seats](/api/seatsio/hold-release-seats) - Seats.io integration
+
+## Source Reference
+
+Implementation: `/home/daytona/workspace/source/functions/events/virtual_office/virtual_office.js`

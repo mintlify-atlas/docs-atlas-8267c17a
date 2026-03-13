@@ -1,0 +1,298 @@
+---
+title: 'Manage Charts'
+api: 'POST Multiple Endpoints'
+description: 'Manage venue charts (seating layouts) in Seats.io'
+---
+
+## Overview
+
+Charts represent venue layouts and seating arrangements in Seats.io. These endpoints allow you to list, copy, tag, and manage charts for your events.
+
+## List All Charts
+
+### Endpoint
+`POST /list_charts_seatsio`
+
+### Description
+Retrieve all venue charts from your Seats.io account.
+
+### Request
+No request parameters required.
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Listado de Venues en Seatsio"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="charts" type="array">
+    Array of chart objects, each containing:
+    - `id`: Unique chart identifier
+    - `key`: Chart key
+    - `name`: Chart name
+    - `status`: Chart status (e.g., "PUBLISHED")
+    - `tags`: Array of tags associated with the chart
+    - `archived`: Boolean indicating if archived
+    - `publishedVersionThumbnailUrl`: URL to chart thumbnail
+  </ResponseField>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "message": "Listado de Venues en Seatsio",
+  "status": 200,
+  "data": {
+    "charts": [
+      {
+        "id": "abc123",
+        "key": "4c7e5e7c-9f3d-4b5a-8e2f-1a2b3c4d5e6f",
+        "name": "Main Concert Hall",
+        "status": "PUBLISHED",
+        "tags": ["concert", "venue-a"],
+        "archived": false,
+        "publishedVersionThumbnailUrl": "https://..."
+      }
+    ]
+  }
+}
+```
+
+---
+
+## List Chart Objects
+
+### Endpoint
+`POST /list_objects_charts_seatsio`
+
+### Description
+Get a summary of all objects (seats, tables, etc.) in a chart, grouped by category label.
+
+### Request
+
+<ParamField body="chart_id" type="string" required>
+  The unique identifier of the chart to analyze.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Listado de Objetos en Seatsio"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="summary_object" type="object">
+    Object with category labels as keys, each containing:
+    - `count`: Number of objects in this category
+    - `byStatus`: Breakdown of objects by status
+    - `byAvailability`: Available vs booked counts
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "chart_id": "4c7e5e7c-9f3d-4b5a-8e2f-1a2b3c4d5e6f"
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Listado de Objetos en Seatsio",
+  "status": 200,
+  "data": {
+    "summary_object": {
+      "VIP": {
+        "count": 50,
+        "byStatus": { "free": 50, "booked": 0 },
+        "byAvailability": { "available": 50, "not_available": 0 }
+      },
+      "General Admission": {
+        "count": 200,
+        "byStatus": { "free": 200, "booked": 0 },
+        "byAvailability": { "available": 200, "not_available": 0 }
+      }
+    }
+  }
+}
+```
+
+---
+
+## Copy Chart
+
+### Endpoint
+`POST /copy_chart_seatsio`
+
+### Description
+Create a copy of an existing chart. Useful for creating variations of venue layouts.
+
+### Request
+
+<ParamField body="chart_id" type="string" required>
+  The unique identifier of the chart to copy.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Chart copiado en Seatsio"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="copy_chart" type="object">
+    The newly created chart object with a new unique ID.
+  </ResponseField>
+</ResponseField>
+
+---
+
+## Add Tags to Chart
+
+### Endpoint
+`POST /add_tags_to_chart_seatsio`
+
+### Description
+Add organizational tags to a chart for better categorization and filtering.
+
+### Request
+
+<ParamField body="chart_id" type="string" required>
+  The unique identifier of the chart.
+</ParamField>
+
+<ParamField body="tags" type="array" required>
+  Array of tag strings to add to the chart (e.g., ["concert", "outdoor", "venue-a"]).
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Tags agregados al chart en Seatsio"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="tags" type="array">
+    Array of tags that were added.
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "chart_id": "4c7e5e7c-9f3d-4b5a-8e2f-1a2b3c4d5e6f",
+    "tags": ["concert", "large-venue", "2026-season"]
+  }
+}
+```
+
+---
+
+## Remove Tags from Chart
+
+### Endpoint
+`POST /remove_tags_from_chart_seatsio`
+
+### Description
+Remove tags from a chart.
+
+### Request
+
+<ParamField body="chart_id" type="string" required>
+  The unique identifier of the chart.
+</ParamField>
+
+<ParamField body="tags" type="array" required>
+  Array of tag strings to remove from the chart.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Tags removidos del chart en Seatsio"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="tags" type="array">
+    Array of tags that were removed.
+  </ResponseField>
+</ResponseField>
+
+---
+
+## Get Published Version
+
+### Endpoint
+`POST /published_charts_seatsio`
+
+### Description
+Retrieve the published version thumbnail of a chart.
+
+### Request
+
+<ParamField body="chart_id" type="string" required>
+  The unique identifier of the chart.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Version Publicada"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="charts" type="object">
+    Information about the published version, including thumbnail URL.
+  </ResponseField>
+</ResponseField>
+
+---
+
+## Implementation Details
+
+- All chart operations use Seats.io South America region (`Region.SA()`)
+- Charts must be published before they can be used to create events
+- Tags are useful for organizing charts by venue type, season, or category
+- Chart copying preserves all seating arrangements but generates a new unique ID
+
+## Related Endpoints
+
+- [Create Event](/api/seatsio/create-event) - Create events using charts
+- [Hold & Release Seats](/api/seatsio/hold-release-seats) - Manage seat reservations
+
+## Source Reference
+
+Implementation: `/home/daytona/workspace/source/functions/seatsio/seatsio.js:84-182`

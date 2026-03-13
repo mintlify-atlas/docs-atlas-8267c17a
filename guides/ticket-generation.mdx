@@ -1,0 +1,613 @@
+---
+title: 'Ticket Generation'
+description: 'Generate tickets, manage inventory, and implement locking/unlocking mechanisms for your events'
+icon: 'ticket'
+---
+
+Ticket generation is a core feature of the TMT platform. This guide covers creating tickets, managing inventory, implementing temporary locks during checkout, and tracking ticket lifecycle.
+
+## Ticket Generation Process
+
+Tickets are generated based on the zone configuration you created during event setup. Each ticket is assigned a unique ID and tracked through its entire lifecycle.
+
+<Steps>
+  <Step title="Configure Event Zones">
+    Ensure your event has zones configured with seat counts and pricing.
+  </Step>
+  
+  <Step title="Generate Tickets">
+    Call the ticket generation endpoint to create all tickets for the event.
+  </Step>
+  
+  <Step title="Verify Creation">
+    Confirm all tickets were created successfully in both Firestore and PostgreSQL.
+  </Step>
+  
+  <Step title="Activate Sales">
+    Make tickets available for purchase by updating event status.
+  </Step>
+</Steps>
+
+## Generate Tickets for Event
+
+Generate all tickets for an event based on zone configuration:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/tickets_generate',
+  {
+    data: {
+      idevent: "evt_2024_concert_001"
+    }
+  }
+);
+```
+
+### How It Works
+
+The ticket generation process:
+
+1. Reads event details from Firestore
+2. Retrieves zone configuration from `events/{eventId}/setup/zones`
+3. Iterates through each zone and creates tickets based on seat count
+4. Assigns unique IDs to each ticket
+5. Writes tickets to both Firestore and PostgreSQL
+6. Creates initial ledger entry with "generated" action
+
+### Response
+
+```json
+{
+  "message": "Se Generaron: 5000",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+<Tip>
+Ticket generation is a one-time operation per event. Once tickets are generated, they cannot be regenerated. Plan your zones carefully before generating tickets.
+</Tip>
+
+## Ticket Structure
+
+Each generated ticket has the following structure:
+
+```json
+{
+  "ticket_id": "evt_2024_concert_001-abc123xyz",
+  "event_id": "evt_2024_concert_001",
+  "event_name": "Summer Music Festival 2024",
+  "zone": "VIP",
+  "color": "#FFD700",
+  "seat_id": "vip-1",
+  "seat_row": "por asignar",
+  "status": true,
+  "date_start": "2024-07-15T18:00:00Z",
+  "date_end": "2024-07-15T23:59:00Z",
+  "date": {
+    "created": "2024-03-10T10:00:00Z",
+    "updated": ""
+  },
+  "ledger": [
+    {
+      "date": "2024-03-10T10:00:00Z",
+      "action": "generated",
+      "metadata": ""
+    }
+  ],
+  "customer_email": "",
+  "customer_id": "",
+  "customer_name": "",
+  "customer_phone": "",
+  "access_status": false,
+  "access_entry": false
+}
+```
+
+## List Tickets for Event
+
+Retrieve all tickets for a specific event:
+
+<CodeGroup>
+```javascript All Tickets
+const response = await axios.post(
+  'https://your-api-url/tickets_list_event',
+  {
+    data: {
+      event_id: "evt_2024_concert_001"
+    }
+  }
+);
+```
+
+```javascript Available for Sales
+const response = await axios.post(
+  'https://your-api-url/tickets_list_event_sales',
+  {
+    data: {
+      event_id: "evt_2024_concert_001"
+    }
+  }
+);
+```
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "message": "Evento Encontrado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": [
+      {
+        "id": "evt_2024_concert_001-abc123xyz",
+        "ticket_id": "evt_2024_concert_001-abc123xyz",
+        "color": "#FFD700",
+        "event_id": "evt_2024_concert_001",
+        "event_name": "Summer Music Festival 2024",
+        "zone": "VIP",
+        "seat_id": "vip-1",
+        "status": true,
+        "status_offline": null,
+        "date_created": "2024-03-10T10:00:00Z",
+        "date_start": "2024-07-15T18:00:00Z",
+        "date_end": "2024-07-15T23:59:00Z"
+      }
+    ]
+  }
+}
+```
+
+## Get Individual Ticket
+
+Retrieve details for a specific ticket:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/tickets_individual',
+  {
+    data: {
+      ticket_id: "evt_2024_concert_001-abc123xyz"
+    }
+  }
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Ticket Encontrado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": [
+      {
+        "ticket_id": "evt_2024_concert_001-abc123xyz",
+        "event_name": "Summer Music Festival 2024",
+        "zone": "VIP",
+        "customer_email": "customer@example.com",
+        "customer_name": "John Doe",
+        "status": false,
+        "access_status": true,
+        "ledger": [
+          {
+            "date": "2024-03-10T10:00:00Z",
+            "action": "generated",
+            "metadata": ""
+          },
+          {
+            "date": "2024-03-11T14:30:00Z",
+            "action": "sold",
+            "metadata": "{}"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Ticket Locking (Reservation)
+
+Temporarily lock tickets during the checkout process to prevent double-booking:
+
+```javascript
+const lockTickets = {
+  data: {
+    ticketd_reserved: [
+      "evt_2024_concert_001-abc123xyz",
+      "evt_2024_concert_001-def456uvw"
+    ],
+    reserved_time: 900  // 15 minutes in seconds
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/tickets_lock',
+  lockTickets
+);
+```
+
+### How Locking Works
+
+1. System checks if all tickets are available
+2. Checks if tickets are already locked by another user
+3. If available, creates lock records in `tickets_blocked` table
+4. Sets expiration time based on `reserved_time` parameter
+5. Tickets remain locked until purchased or lock expires
+
+### Success Response
+
+```json
+{
+  "message": "Tickets blocked",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "tickets": [
+      "evt_2024_concert_001-abc123xyz",
+      "evt_2024_concert_001-def456uvw"
+    ]
+  }
+}
+```
+
+### Error Response (Tickets Not Available)
+
+```json
+{
+  "message": "Tickets no disponibles",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "nodisponible": [
+      "evt_2024_concert_001-abc123xyz"
+    ]
+  }
+}
+```
+
+<Warning>
+Always implement ticket locking during checkout to prevent race conditions where multiple users try to purchase the same ticket simultaneously.
+</Warning>
+
+## Ticket Unlocking
+
+Unlock tickets when users abandon cart or locks expire:
+
+<CodeGroup>
+```javascript Automatic Unlock (Expired Locks)
+const response = await axios.post(
+  'https://your-api-url/tickets_unlock',
+  {
+    data: {}
+  }
+);
+// Automatically unlocks all tickets with expired locks
+```
+
+```javascript Manual Unlock (Specific Tickets)
+const response = await axios.post(
+  'https://your-api-url/tickets_unlock_param',
+  {
+    data: {
+      ticketd_reserved: [
+        "evt_2024_concert_001-abc123xyz",
+        "evt_2024_concert_001-def456uvw"
+      ]
+    }
+  }
+);
+```
+</CodeGroup>
+
+### When to Unlock Tickets
+
+- User closes checkout page
+- User explicitly cancels reservation
+- Payment fails
+- Lock timer expires (automatic)
+- User session times out
+
+## Update Ticket Status
+
+Update ticket information:
+
+```javascript
+const updateTicket = {
+  data: {
+    id: "evt_2024_concert_001-abc123xyz",
+    status: false  // false = sold, true = available
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/tickets_update_individual',
+  updateTicket
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Ticket Actualizado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": {
+      "ticket_id": "evt_2024_concert_001-abc123xyz",
+      "status": false
+    }
+  }
+}
+```
+
+## Ticket Ledger
+
+Every ticket maintains a ledger that tracks its complete history:
+
+### Ledger Actions
+
+- `generated` - Ticket was created
+- `reserved` - Ticket was temporarily locked
+- `sold` - Ticket was purchased
+- `assigned` - Ticket was assigned to customer
+- `transferred` - Ticket ownership was transferred
+- `accessed` - Ticket was scanned at entry
+- `came-out` - Ticket holder exited venue
+- `updated` - Ticket information was modified
+
+### Example Ledger
+
+```json
+{
+  "ledger": [
+    {
+      "date": "2024-03-10T10:00:00Z",
+      "action": "generated",
+      "metadata": ""
+    },
+    {
+      "date": "2024-03-11T14:25:00Z",
+      "action": "reserved",
+      "metadata": "{\"reserved_by\":\"user123\",\"expires\":\"2024-03-11T14:40:00Z\"}"
+    },
+    {
+      "date": "2024-03-11T14:30:00Z",
+      "action": "sold",
+      "metadata": "{\"order_id\":\"order456\",\"payment_method\":\"stripe\"}"
+    },
+    {
+      "date": "2024-07-15T18:30:00Z",
+      "action": "accessed",
+      "metadata": "{\"checkpoint\":\"main_entrance\",\"staff_id\":\"staff789\"}"
+    }
+  ]
+}
+```
+
+<Tip>
+The ledger is immutable - new actions are appended, never modified. This provides a complete audit trail for each ticket.
+</Tip>
+
+## Inventory Management
+
+### Check Available Tickets by Zone
+
+```javascript
+const getAvailableByZone = async (eventId) => {
+  const tickets = await db.collection('events')
+    .doc(eventId)
+    .collection('tickets')
+    .where('status', '==', true)
+    .get();
+  
+  const inventory = {};
+  
+  tickets.forEach(ticket => {
+    const data = ticket.data();
+    if (!inventory[data.zone]) {
+      inventory[data.zone] = 0;
+    }
+    inventory[data.zone]++;
+  });
+  
+  return inventory;
+};
+
+// Result:
+// {
+//   "VIP": 450,
+//   "General Admission": 3200,
+//   "Balcony": 980
+// }
+```
+
+### Check Total Sold Tickets
+
+```javascript
+const getSoldCount = async (eventId) => {
+  const soldTickets = await db.collection('events')
+    .doc(eventId)
+    .collection('tickets')
+    .where('status', '==', false)
+    .get();
+  
+  return soldTickets.size;
+};
+```
+
+## Offline Ticket Management
+
+For events with offline sales (box office), sync ticket updates:
+
+```javascript
+const offlineTickets = {
+  data: {
+    tickets_offline: [
+      {
+        ticket_id: "evt_2024_concert_001-abc123xyz",
+        customer_email: "customer@example.com",
+        customer_name: "John Doe",
+        customer_phone: "+58424123456",
+        customer_id: "V12345678",
+        date_sold: "2024-03-11T10:00:00Z",
+        payment_method: "cash",
+        amount: 150.00
+      }
+    ]
+  }
+};
+
+// Sync offline sales
+const response = await axios.post(
+  'https://your-api-url/offline_office_sync',
+  offlineTickets
+);
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Lock Before Checkout" icon="lock">
+    Always lock tickets when user adds to cart to prevent double-booking.
+  </Card>
+  
+  <Card title="Set Reasonable Lock Times" icon="clock">
+    Use 10-15 minute lock periods to balance user experience and availability.
+  </Card>
+  
+  <Card title="Unlock on Abandon" icon="unlock">
+    Release locks immediately when users leave checkout flow.
+  </Card>
+  
+  <Card title="Monitor Inventory" icon="chart-line">
+    Track available tickets by zone to inform customers of availability.
+  </Card>
+</CardGroup>
+
+## Common Scenarios
+
+### Scenario 1: User Checkout Flow
+
+```javascript
+// 1. User selects tickets
+const selectedTickets = [
+  "evt_2024_concert_001-abc123xyz",
+  "evt_2024_concert_001-def456uvw"
+];
+
+// 2. Lock tickets (15 minutes)
+const lockResponse = await axios.post(
+  'https://your-api-url/tickets_lock',
+  {
+    data: {
+      ticketd_reserved: selectedTickets,
+      reserved_time: 900
+    }
+  }
+);
+
+if (lockResponse.data.status === 200) {
+  // 3. Process payment
+  // 4. On success, tickets are marked as sold during order creation
+  // 5. Lock is automatically removed
+} else {
+  // Tickets not available, show error
+  alert('Some tickets are no longer available');
+}
+```
+
+### Scenario 2: Abandoned Cart Cleanup
+
+```javascript
+// Run periodically (every 5 minutes)
+setInterval(async () => {
+  await axios.post(
+    'https://your-api-url/tickets_unlock',
+    { data: {} }
+  );
+  console.log('Expired locks cleared');
+}, 300000);
+```
+
+### Scenario 3: Check Availability Before Purchase
+
+```javascript
+const checkAvailability = async (ticketIds) => {
+  const response = await axios.post(
+    'https://your-api-url/tickets_lock',
+    {
+      data: {
+        ticketd_reserved: ticketIds,
+        reserved_time: 60  // 1 minute test lock
+      }
+    }
+  );
+  
+  if (response.data.status === 200) {
+    // Tickets available, unlock them
+    await axios.post(
+      'https://your-api-url/tickets_unlock_param',
+      {
+        data: { ticketd_reserved: ticketIds }
+      }
+    );
+    return true;
+  }
+  
+  return false;
+};
+```
+
+## Error Handling
+
+<CodeGroup>
+```json Ticket Not Found
+{
+  "message": "Ticket no Encontrado",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+```json Event Not Active
+{
+  "message": "El evento no esta activo para generar tickets",
+  "status": 200,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+```json Event Not Found
+{
+  "message": "Evento no Encontrado",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Process Payments" icon="credit-card" href="/guides/payment-processing">
+    Accept payments for tickets
+  </Card>
+  
+  <Card title="Access Control" icon="door-open" href="/guides/access-control">
+    Scan and validate tickets at entry
+  </Card>
+</CardGroup>

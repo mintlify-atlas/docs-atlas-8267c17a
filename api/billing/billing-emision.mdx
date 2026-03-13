@@ -1,0 +1,286 @@
+---
+title: 'Billing Emission'
+api: 'POST /billing_emision'
+description: 'Emit electronic invoices to external billing system'
+---
+
+## Overview
+
+This endpoint emits electronic invoices to an external billing API. It handles authentication, document generation, and submission to the external billing system (The Factory HKA).
+
+## Authentication
+
+The endpoint internally authenticates with the external billing API using credentials configured in the system.
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  Request data wrapper
+  
+  <ParamField body="body_emision" type="object" required>
+    Billing document structure
+    
+    <ParamField body="DocumentoElectronico" type="object" required>
+      Electronic document container
+      
+      <ParamField body="Encabezado" type="object" required>
+        Document header information
+        
+        <ParamField body="IdentificacionDocumento" type="object">
+          <ParamField body="TipoDocumento" type="string">
+            Document type (e.g., "01" for invoice)
+          </ParamField>
+          <ParamField body="NumeroDocumento" type="string">
+            Sequential invoice number (8 digits, zero-padded)
+          </ParamField>
+          <ParamField body="FechaEmision" type="string">
+            Emission date (DD/MM/YYYY)
+          </ParamField>
+          <ParamField body="HoraEmision" type="string">
+            Emission time (hh:mm:ss a)
+          </ParamField>
+          <ParamField body="Moneda" type="string">
+            Currency code (BSD, USD)
+          </ParamField>
+        </ParamField>
+        
+        <ParamField body="Vendedor" type="object">
+          Seller information
+          <ParamField body="codigo" type="string">Seller code</ParamField>
+          <ParamField body="nombre" type="string">Seller name</ParamField>
+          <ParamField body="numCajero" type="string">Cashier number</ParamField>
+        </ParamField>
+        
+        <ParamField body="Comprador" type="object">
+          Buyer information
+          <ParamField body="TipoIdentificacion" type="string">ID type (V, J, E, P)</ParamField>
+          <ParamField body="NumeroIdentificacion" type="string">ID number</ParamField>
+          <ParamField body="RazonSocial" type="string">Legal name</ParamField>
+          <ParamField body="Direccion" type="string">Address</ParamField>
+          <ParamField body="Pais" type="string">Country code</ParamField>
+          <ParamField body="Telefono" type="array">Phone numbers</ParamField>
+          <ParamField body="Correo" type="array">Email addresses</ParamField>
+        </ParamField>
+        
+        <ParamField body="Tercero" type="object">
+          Third party information (client/producer)
+          <ParamField body="tipoIdentificacion" type="string">ID type</ParamField>
+          <ParamField body="numeroIdentificacion" type="string">ID number</ParamField>
+          <ParamField body="razonSocial" type="string">Legal name</ParamField>
+          <ParamField body="direccion" type="string">Address</ParamField>
+          <ParamField body="tipo" type="string">Type (e.g., "PRODUCTORA")</ParamField>
+          <ParamField body="correo" type="array">Email addresses</ParamField>
+        </ParamField>
+        
+        <ParamField body="Totales" type="object">
+          Totals in base currency (BSD)
+          <ParamField body="NroItems" type="string">Number of line items</ParamField>
+          <ParamField body="MontoGravadoTotal" type="string">Taxable amount (2 decimals)</ParamField>
+          <ParamField body="Subtotal" type="string">Subtotal (2 decimals)</ParamField>
+          <ParamField body="TotalAPagar" type="string">Total to pay (2 decimals)</ParamField>
+          <ParamField body="TotalIVA" type="string">Total VAT 16% (2 decimals)</ParamField>
+          <ParamField body="MontoEnLetras" type="string">Amount in words (uppercase)</ParamField>
+          <ParamField body="ImpuestosSubtotal" type="array">
+            Tax breakdown array
+            <ParamField body="CodigoTotalImp" type="string">Tax code (G for VAT, IGTF for currency tax)</ParamField>
+            <ParamField body="AlicuotaImp" type="string">Tax rate percentage</ParamField>
+            <ParamField body="BaseImponibleImp" type="string">Tax base</ParamField>
+            <ParamField body="ValorTotalImp" type="string">Tax amount</ParamField>
+          </ParamField>
+        </ParamField>
+        
+        <ParamField body="TotalesOtraMoneda" type="object">
+          Totals in foreign currency (USD)
+          <ParamField body="Moneda" type="string">Currency code</ParamField>
+          <ParamField body="TipoCambio" type="string">Exchange rate (4 decimals)</ParamField>
+          <ParamField body="MontoGravadoTotal" type="string">Taxable amount</ParamField>
+          <ParamField body="Subtotal" type="string">Subtotal</ParamField>
+          <ParamField body="TotalAPagar" type="string">Total to pay</ParamField>
+          <ParamField body="TotalIVA" type="string">Total VAT</ParamField>
+          <ParamField body="ImpuestosSubtotal" type="array">Tax breakdown</ParamField>
+        </ParamField>
+      </ParamField>
+      
+      <ParamField body="DetallesItems" type="array" required>
+        Line items array
+        
+        <ParamField body="NumeroLinea" type="string">Line number</ParamField>
+        <ParamField body="IndicadorBienoServicio" type="string">Goods (1) or Service (2)</ParamField>
+        <ParamField body="Descripcion" type="string">Item description</ParamField>
+        <ParamField body="Cantidad" type="string">Quantity</ParamField>
+        <ParamField body="UnidadMedida" type="string">Unit of measure (4L for service)</ParamField>
+        <ParamField body="PrecioUnitario" type="string">Unit price (2 decimals)</ParamField>
+        <ParamField body="PrecioItem" type="string">Line subtotal</ParamField>
+        <ParamField body="CodigoImpuesto" type="string">Tax code (G for VAT)</ParamField>
+        <ParamField body="TasaIVA" type="string">VAT rate (16)</ParamField>
+        <ParamField body="ValorIVA" type="string">VAT amount</ParamField>
+        <ParamField body="ValorTotalItem" type="string">Line total</ParamField>
+      </ParamField>
+    </ParamField>
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the emission was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response from external billing API
+  
+  <ResponseField name="mensaje" type="string">
+    Response message
+  </ResponseField>
+  
+  <ResponseField name="resultado" type="object">
+    Result details
+    
+    <ResponseField name="numeroDocumento" type="string">
+      Generated document number/ID
+    </ResponseField>
+    
+    <ResponseField name="urlConsulta" type="string">
+      URL to view/download the invoice
+    </ResponseField>
+    
+    <ResponseField name="codigoQR" type="string">
+      QR code for invoice verification
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="validaciones" type="array">
+    Validation warnings or errors (if any)
+  </ResponseField>
+</ResponseField>
+
+## Tax Calculation
+
+### VAT (IVA)
+- Rate: 16%
+- Applied to subtotal
+- Calculated with rounding to 2 decimals
+
+### IGTF (Currency Tax)
+- Rate: 3%
+- Applied only when payment is made in foreign currency (Zelle, Cash Dollars, Foreign Cash)
+- Base: Amount paid in foreign currency (capped at invoice total)
+- Calculated with truncation to 2 decimals
+
+### Exchange Rate
+- USD amounts converted to BSD (Bolívares)
+- Individual components truncated to 2 decimals
+- Total must equal sum of truncated components
+
+## Example Request
+
+```json
+{
+  "data": {
+    "body_emision": {
+      "DocumentoElectronico": {
+        "Encabezado": {
+          "IdentificacionDocumento": {
+            "TipoDocumento": "01",
+            "NumeroDocumento": "00000123",
+            "FechaEmision": "13/03/2026",
+            "FechaVencimiento": "13/03/2026",
+            "HoraEmision": "02:30:00 PM",
+            "Anulado": false,
+            "TipoDePago": "Inmediato",
+            "Serie": "",
+            "TipoDeVenta": "Interna",
+            "Moneda": "BSD"
+          },
+          "Vendedor": {
+            "codigo": "01",
+            "nombre": "Box Office Name",
+            "numCajero": "01"
+          },
+          "Comprador": {
+            "TipoIdentificacion": "V",
+            "NumeroIdentificacion": "12345678",
+            "RazonSocial": "John Doe",
+            "Direccion": "Caracas",
+            "Pais": "VE",
+            "Telefono": ["+584121234567"],
+            "Correo": ["john.doe@example.com"]
+          },
+          "Totales": {
+            "NroItems": "2",
+            "MontoGravadoTotal": "1000.00",
+            "Subtotal": "1000.00",
+            "TotalAPagar": "1160.00",
+            "TotalIVA": "160.00",
+            "MontoEnLetras": "MIL CIENTO SESENTA BOLÍVARES",
+            "ImpuestosSubtotal": [
+              {
+                "CodigoTotalImp": "G",
+                "AlicuotaImp": "16.00",
+                "BaseImponibleImp": "1000.00",
+                "ValorTotalImp": "160.00"
+              }
+            ]
+          },
+          "TotalesOtraMoneda": {
+            "Moneda": "USD",
+            "TipoCambio": "36.5000",
+            "MontoGravadoTotal": "27.40",
+            "Subtotal": "27.40",
+            "TotalAPagar": "31.78",
+            "TotalIVA": "4.38"
+          }
+        },
+        "DetallesItems": [
+          {
+            "NumeroLinea": "1",
+            "IndicadorBienoServicio": "2",
+            "Descripcion": "Tickets para Concert Event - Zona: VIP",
+            "Cantidad": "2",
+            "UnidadMedida": "4L",
+            "PrecioUnitario": "500.00",
+            "PrecioItem": "1000.00",
+            "CodigoImpuesto": "G",
+            "TasaIVA": "16",
+            "ValorIVA": "160.00",
+            "ValorTotalItem": "1000.00"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+## Example Response
+
+```json
+{
+  "mensaje": "Documento emitido exitosamente",
+  "resultado": {
+    "numeroDocumento": "00000123",
+    "urlConsulta": "https://demoemisionv2.thefactoryhka.com.ve/consulta/00000123",
+    "codigoQR": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg..."
+  },
+  "validaciones": []
+}
+```
+
+## Error Handling
+
+- **500**: Authentication failed with external API
+- **500**: Validation errors in document structure
+- **500**: External API error
+
+Error responses include:
+```json
+{
+  "mensaje": "Error description",
+  "validaciones": [
+    {
+      "campo": "field_name",
+      "error": "error_description"
+    }
+  ]
+}
+```

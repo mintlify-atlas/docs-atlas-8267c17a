@@ -1,0 +1,396 @@
+---
+title: 'Stripe Integration'
+description: 'Process international card payments using Stripe Payment Intents'
+---
+
+## Overview
+
+The Stripe integration provides secure international payment processing through Stripe's Payment Intent API. This integration supports card payments with built-in 3D Secure authentication and webhook notifications.
+
+<Warning>
+  **Security Notice**: All Stripe operations require proper authentication and use of HTTPS. Never expose your Stripe secret key in client-side code.
+</Warning>
+
+## Authentication
+
+All Stripe endpoints use Firebase Cloud Functions authentication with CORS enabled.
+
+**Required Headers:**
+- `Content-Type: application/json`
+- Valid Firebase authentication token
+
+**Base Configuration:**
+- Currency: USD (default)
+- Payment Method: Card
+- Platform: TMT
+
+---
+
+## Create Payment Intent
+
+Creates a new Stripe Payment Intent for processing a card payment.
+
+### Endpoint
+
+```
+POST /stripe_create_payment_intent
+```
+
+### Request Parameters
+
+<ParamField body="amount" type="number" required>
+  Payment amount in USD (will be converted to cents automatically)
+</ParamField>
+
+<ParamField body="currency" type="string" default="usd">
+  Three-letter ISO currency code (lowercase)
+</ParamField>
+
+<ParamField body="description" type="string">
+  Description of the payment (default: "Compra de tickets")
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Additional metadata to attach to the payment intent
+</ParamField>
+
+### Request Example
+
+```json
+{
+  "data": {
+    "amount": 50.00,
+    "currency": "usd",
+    "description": "Event ticket purchase",
+    "metadata": {
+      "order_id": "ORD-12345",
+      "customer_email": "customer@example.com"
+    }
+  }
+}
+```
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message ("Procesado" on success)
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data.success" type="boolean">
+  Whether the payment intent was created successfully
+</ResponseField>
+
+<ResponseField name="data.client_secret" type="string">
+  Client secret for completing payment on frontend
+</ResponseField>
+
+<ResponseField name="data.payment_intent_id" type="string">
+  Unique identifier for the payment intent
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "client_secret": "pi_xxx_secret_xxx",
+    "payment_intent_id": "pi_1234567890"
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "message": "Error en el Proceso",
+  "status": 400,
+  "error": "El monto es requerido y debe ser mayor a 0"
+}
+```
+
+---
+
+## Confirm Payment
+
+Confirms and retrieves the status of a completed payment.
+
+### Endpoint
+
+```
+POST /stripe_confirm_payment
+```
+
+### Request Parameters
+
+<ParamField body="payment_intent_id" type="string" required>
+  The ID of the payment intent to confirm
+</ParamField>
+
+### Request Example
+
+```json
+{
+  "data": {
+    "payment_intent_id": "pi_1234567890"
+  }
+}
+```
+
+### Response
+
+<ResponseField name="data.payment_intent.id" type="string">
+  Payment intent ID
+</ResponseField>
+
+<ResponseField name="data.payment_intent.status" type="string">
+  Payment status (succeeded, processing, requires_action, etc.)
+</ResponseField>
+
+<ResponseField name="data.payment_intent.amount" type="number">
+  Payment amount in dollars (converted from cents)
+</ResponseField>
+
+<ResponseField name="data.payment_intent.currency" type="string">
+  Three-letter currency code
+</ResponseField>
+
+<ResponseField name="data.payment_intent.created" type="number">
+  Unix timestamp of creation
+</ResponseField>
+
+<ResponseField name="data.payment_intent.payment_method" type="string">
+  Payment method ID used
+</ResponseField>
+
+<ResponseField name="data.payment_intent.charges" type="array">
+  Array of charge objects
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "payment_intent": {
+      "id": "pi_1234567890",
+      "status": "succeeded",
+      "amount": 50.00,
+      "currency": "usd",
+      "created": 1678901234,
+      "payment_method": "pm_1234567890",
+      "charges": [
+        {
+          "id": "ch_1234567890",
+          "amount": 5000,
+          "status": "succeeded"
+        }
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Get Payment Intent
+
+Retrieves information about a specific payment intent.
+
+### Endpoint
+
+```
+POST /stripe_get_payment_intent
+```
+
+### Request Parameters
+
+<ParamField body="payment_intent_id" type="string" required>
+  The ID of the payment intent to retrieve
+</ParamField>
+
+### Request Example
+
+```json
+{
+  "data": {
+    "payment_intent_id": "pi_1234567890"
+  }
+}
+```
+
+### Response Example
+
+```json
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "success": true,
+    "payment_intent": {
+      "id": "pi_1234567890",
+      "status": "succeeded",
+      "amount": 50.00,
+      "currency": "usd",
+      "metadata": {
+        "order_id": "ORD-12345",
+        "platform": "TMT",
+        "timestamp": "2026-03-13T10:30:00.000Z"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Webhook Handler
+
+Receives and processes webhook events from Stripe for payment notifications.
+
+### Endpoint
+
+```
+POST /stripe_webhook
+```
+
+<Warning>
+  **Webhook Security**: This endpoint verifies webhook signatures using your Stripe webhook secret. Configure the webhook secret in your environment variables as `STRIPE_WEBHOOK_SECRET`.
+</Warning>
+
+### Headers Required
+
+<ParamField header="stripe-signature" type="string" required>
+  Stripe webhook signature for verification
+</ParamField>
+
+### Supported Events
+
+<Tabs>
+  <Tab title="payment_intent.succeeded">
+    Triggered when a payment is successfully completed.
+
+    **Event Data:**
+    ```json
+    {
+      "type": "payment_intent.succeeded",
+      "data": {
+        "object": {
+          "id": "pi_1234567890",
+          "amount": 5000,
+          "currency": "usd",
+          "status": "succeeded",
+          "metadata": {
+            "order_id": "ORD-12345"
+          }
+        }
+      }
+    }
+    ```
+
+    Use this event to update order status, send confirmation emails, or trigger fulfillment.
+  </Tab>
+
+  <Tab title="payment_intent.payment_failed">
+    Triggered when a payment attempt fails.
+
+    **Event Data:**
+    ```json
+    {
+      "type": "payment_intent.payment_failed",
+      "data": {
+        "object": {
+          "id": "pi_1234567890",
+          "status": "requires_payment_method",
+          "last_payment_error": {
+            "message": "Your card was declined"
+          }
+        }
+      }
+    }
+    ```
+
+    Handle failed payments by notifying the customer or retrying payment.
+  </Tab>
+</Tabs>
+
+### Response
+
+```json
+{
+  "received": true
+}
+```
+
+---
+
+## Payment Status Values
+
+| Status | Description |
+|--------|-------------|
+| `requires_payment_method` | Waiting for payment method |
+| `requires_confirmation` | Payment method attached, needs confirmation |
+| `requires_action` | Additional authentication required (3D Secure) |
+| `processing` | Payment is being processed |
+| `succeeded` | Payment completed successfully |
+| `canceled` | Payment was canceled |
+
+---
+
+## Error Codes
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 400 | Bad Request | Missing or invalid parameters |
+| 500 | Internal Error | Payment processing error |
+
+### Common Error Messages
+
+- `"El monto es requerido y debe ser mayor a 0"` - Amount is required and must be greater than 0
+- `"ID de Payment Intent es requerido"` - Payment Intent ID is required
+- `"El pago no fue completado"` - Payment was not completed
+
+---
+
+## Integration Example
+
+```javascript
+// Step 1: Create payment intent
+const createIntent = httpsCallable(functions, 'stripe_create_payment_intent');
+const { data } = await createIntent({
+  amount: 50.00,
+  currency: 'usd',
+  description: 'Event ticket purchase'
+});
+
+// Step 2: Use client_secret on frontend with Stripe.js
+const { client_secret, payment_intent_id } = data.data;
+
+// Step 3: After frontend confirmation, verify payment
+const confirmPayment = httpsCallable(functions, 'stripe_confirm_payment');
+const result = await confirmPayment({
+  payment_intent_id: payment_intent_id
+});
+
+if (result.data.data.payment_intent.status === 'succeeded') {
+  console.log('Payment successful!');
+}
+```
+
+<Warning>
+  **Best Practices**:
+  - Always verify payments on your backend before fulfilling orders
+  - Use webhooks for reliable payment notifications
+  - Store payment_intent_id for reference and reconciliation
+  - Handle all possible payment statuses in your application
+</Warning>

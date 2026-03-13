@@ -1,0 +1,1059 @@
+---
+title: "Authentication"
+description: "Secure your TMT API requests with Firebase Authentication and understand token-based access control"
+---
+
+## Overview
+
+TMT API uses **Firebase Authentication** to secure all Cloud Functions endpoints. Every request must include a valid Firebase ID token to authenticate the user and authorize access to protected resources.
+
+<Note>
+  Firebase Authentication provides enterprise-grade security with built-in user management, token validation, and session handling.
+</Note>
+
+## How Authentication Works
+
+The TMT API authentication flow consists of three key steps:
+
+<Steps>
+  <Step title="User Authentication">
+    Users authenticate with Firebase using email/password, OAuth providers, or custom tokens.
+  </Step>
+  <Step title="Token Generation">
+    Firebase generates a signed JWT (JSON Web Token) called an ID token that contains the user's identity.
+  </Step>
+  <Step title="Request Authorization">
+    The client includes the ID token in API requests, and Cloud Functions validate it before processing.
+  </Step>
+</Steps>
+
+## Firebase Setup
+
+### Server-Side Configuration
+
+The TMT API initializes Firebase Admin SDK to handle authentication and Firestore operations:
+
+```javascript config/config.js
+const admin = require("firebase-admin");
+admin.initializeApp();
+
+const auth = admin.auth();
+const db = admin.firestore();
+const storage = admin.storage();
+const messaging = admin.messaging();
+
+module.exports = { admin, db, auth, storage, messaging };
+```
+
+### Client-Side Configuration
+
+Configure Firebase in your client application:
+
+<CodeGroup>
+  ```javascript JavaScript/Node.js
+  const { initializeApp } = require('firebase/app');
+  const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
+
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "your-project-id.firebaseapp.com",
+    projectId: "your-project-id",
+    storageBucket: "your-project-id.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  ```
+
+  ```python Python
+  import firebase_admin
+  from firebase_admin import credentials, auth
+
+  # Initialize Firebase Admin SDK
+  cred = credentials.Certificate('path/to/serviceAccountKey.json')
+  firebase_admin.initialize_app(cred)
+  ```
+
+  ```swift iOS (Swift)
+  import Firebase
+  import FirebaseAuth
+
+  // In your AppDelegate
+  FirebaseApp.configure()
+  ```
+
+  ```kotlin Android (Kotlin)
+  import com.google.firebase.FirebaseApp
+  import com.google.firebase.auth.FirebaseAuth
+
+  // In your Application class or MainActivity
+  FirebaseApp.initializeApp(this)
+  val auth = FirebaseAuth.getInstance()
+  ```
+</CodeGroup>
+
+<Warning>
+  Never expose your Firebase service account credentials in client-side code. Use environment variables or secure secret management.
+</Warning>
+
+## User Registration & Login
+
+### Creating a New User
+
+TMT API provides dedicated endpoints for creating different user types:
+
+<CodeGroup>
+  ```javascript create_client
+  const axios = require('axios');
+  const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
+
+  // Step 1: Create a client account via TMT API
+  async function registerClient(userData) {
+    const response = await axios.post(
+      'https://your-region-your-project.cloudfunctions.net/create_client',
+      {
+        data: {
+          name: userData.name,
+          email: userData.email,
+          password: userData.password,
+          name_commercial: userData.commercialName,
+          phone: userData.phone,
+          status: true,
+          id: userData.identificationNumber,
+          id_type: 'passport',
+          city: userData.city,
+          country: userData.country,
+          line: userData.address,
+          zip_code: userData.zipCode,
+          account_type: 'business',
+          commercial_registry: userData.commercialRegistry,
+          last_assembly_minutes: '',
+          fiscal_info: userData.taxInfo,
+          commercial_license: userData.license,
+          taxpayer_type: 'corporate',
+          legal_representative: userData.legalRep,
+          contact_person: userData.contactPerson,
+          bank_accounts: userData.bankAccounts || []
+        }
+      }
+    );
+
+    console.log('User created with UID:', response.data.data.uid);
+    return response.data;
+  }
+
+  // Step 2: Sign in with Firebase Auth to get ID token
+  async function signIn(email, password) {
+    const auth = getAuth();
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const idToken = await userCredential.user.getIdToken();
+    
+    console.log('Signed in successfully');
+    return { user: userCredential.user, idToken };
+  }
+
+  // Usage
+  async function registerAndLogin() {
+    try {
+      // Register
+      await registerClient({
+        name: 'John Doe',
+        email: 'john@example.com',
+        password: 'SecurePassword123!',
+        commercialName: 'Doe Events',
+        phone: '+1234567890',
+        identificationNumber: '123456789',
+        city: 'New York',
+        country: 'USA',
+        address: '123 Broadway',
+        zipCode: '10001',
+        commercialRegistry: 'REG-2024-001',
+        taxInfo: 'EIN: 12-3456789',
+        license: 'LIC-2024-001',
+        legalRep: 'John Doe',
+        contactPerson: 'Jane Doe'
+      });
+
+      // Login and get token
+      const { idToken } = await signIn('john@example.com', 'SecurePassword123!');
+      console.log('ID Token:', idToken);
+      
+      return idToken;
+    } catch (error) {
+      console.error('Error:', error);
+      throw error;
+    }
+  }
+  ```
+
+  ```javascript create_collaborator
+  // Create a collaborator account
+  async function registerCollaborator(collaboratorData) {
+    const response = await axios.post(
+      'https://your-region-your-project.cloudfunctions.net/create_collaborator',
+      {
+        data: {
+          email: collaboratorData.email,
+          password: collaboratorData.password,
+          name: collaboratorData.name,
+          phone: collaboratorData.phone,
+          role: collaboratorData.role,
+          permissions: collaboratorData.permissions
+        }
+      }
+    );
+
+    return response.data;
+  }
+  ```
+
+  ```javascript create_staff
+  // Create a staff account
+  async function registerStaff(staffData) {
+    const response = await axios.post(
+      'https://your-region-your-project.cloudfunctions.net/create_staff',
+      {
+        data: {
+          email: staffData.email,
+          password: staffData.password,
+          name: staffData.name,
+          phone: staffData.phone,
+          department: staffData.department,
+          access_level: staffData.accessLevel
+        }
+      }
+    );
+
+    return response.data;
+  }
+  ```
+</CodeGroup>
+
+### User Login
+
+After creating an account, users can sign in to obtain an ID token:
+
+<CodeGroup>
+  ```javascript Email/Password
+  const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
+
+  async function login(email, password) {
+    const auth = getAuth();
+    
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // Get the ID token
+      const idToken = await user.getIdToken();
+      
+      // Optionally get token with force refresh
+      const refreshedToken = await user.getIdToken(true);
+      
+      console.log('Logged in as:', user.email);
+      console.log('User UID:', user.uid);
+      
+      return { user, idToken };
+    } catch (error) {
+      console.error('Login error:', error.code, error.message);
+      throw error;
+    }
+  }
+  ```
+
+  ```python Python
+  import requests
+  from firebase_admin import auth as admin_auth
+
+  def login_with_email_password(email, password):
+      # For client-side, use Firebase REST API
+      api_key = "YOUR_FIREBASE_API_KEY"
+      url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+      
+      payload = {
+          "email": email,
+          "password": password,
+          "returnSecureToken": True
+      }
+      
+      response = requests.post(url, json=payload)
+      
+      if response.status_code == 200:
+          data = response.json()
+          id_token = data['idToken']
+          print(f"Logged in successfully. User ID: {data['localId']}")
+          return id_token
+      else:
+          print(f"Login failed: {response.json()}")
+          raise Exception("Authentication failed")
+  ```
+
+  ```swift iOS (Swift)
+  import FirebaseAuth
+
+  func login(email: String, password: String, completion: @escaping (String?) -> Void) {
+      Auth.auth().signIn(withEmail: email, password: password) { authResult, error in
+          guard let user = authResult?.user, error == nil else {
+              print("Login error: \(error?.localizedDescription ?? "Unknown error")")
+              completion(nil)
+              return
+          }
+          
+          user.getIDToken { idToken, error in
+              if let token = idToken {
+                  print("Logged in as: \(user.email ?? "")")
+                  completion(token)
+              } else {
+                  print("Failed to get ID token: \(error?.localizedDescription ?? "")")
+                  completion(nil)
+              }
+          }
+      }
+  }
+  ```
+
+  ```kotlin Android (Kotlin)
+  import com.google.firebase.auth.FirebaseAuth
+
+  fun login(email: String, password: String, callback: (String?) -> Unit) {
+      val auth = FirebaseAuth.getInstance()
+      
+      auth.signInWithEmailAndPassword(email, password)
+          .addOnCompleteListener { task ->
+              if (task.isSuccessful) {
+                  val user = auth.currentUser
+                  user?.getIdToken(false)?.addOnCompleteListener { tokenTask ->
+                      if (tokenTask.isSuccessful) {
+                          val idToken = tokenTask.result?.token
+                          println("Logged in as: ${user.email}")
+                          callback(idToken)
+                      } else {
+                          println("Failed to get ID token")
+                          callback(null)
+                      }
+                  }
+              } else {
+                  println("Login failed: ${task.exception?.message}")
+                  callback(null)
+              }
+          }
+  }
+  ```
+</CodeGroup>
+
+## Token Management
+
+### Getting ID Tokens
+
+Firebase ID tokens are short-lived (1 hour by default) and must be refreshed regularly:
+
+```javascript
+const { getAuth } = require('firebase/auth');
+
+class TokenManager {
+  constructor() {
+    this.auth = getAuth();
+    this.currentToken = null;
+    this.tokenExpiry = null;
+  }
+
+  async getValidToken() {
+    const user = this.auth.currentUser;
+    
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Check if token needs refresh (refresh 5 minutes before expiry)
+    const now = Date.now();
+    if (!this.currentToken || !this.tokenExpiry || now >= this.tokenExpiry - 5 * 60 * 1000) {
+      console.log('Refreshing token...');
+      this.currentToken = await user.getIdToken(true); // Force refresh
+      
+      // Tokens expire in 1 hour
+      this.tokenExpiry = now + 60 * 60 * 1000;
+    }
+
+    return this.currentToken;
+  }
+
+  async decodeToken() {
+    const token = await this.getValidToken();
+    const tokenResult = await this.auth.currentUser.getIdTokenResult();
+    
+    return {
+      token: token,
+      claims: tokenResult.claims,
+      expirationTime: tokenResult.expirationTime,
+      authTime: tokenResult.authTime,
+      issuedAtTime: tokenResult.issuedAtTime
+    };
+  }
+}
+
+// Usage
+const tokenManager = new TokenManager();
+const token = await tokenManager.getValidToken();
+```
+
+### Custom Claims
+
+TMT API uses custom claims for additional user metadata and permissions:
+
+```javascript
+// Server-side: Setting custom claims (requires Admin SDK)
+const admin = require('firebase-admin');
+
+async function setUserClaims(uid, claims) {
+  try {
+    await admin.auth().setCustomUserClaims(uid, claims);
+    console.log(`Custom claims set for user ${uid}`);
+  } catch (error) {
+    console.error('Error setting custom claims:', error);
+  }
+}
+
+// Example: Set session ID claim
+await setUserClaims('user-uid-123', {
+  sessionId: 'session-abc-xyz',
+  role: 'admin',
+  accountType: 'business'
+});
+
+// Client-side: Reading custom claims
+const user = auth.currentUser;
+const tokenResult = await user.getIdTokenResult();
+const sessionId = tokenResult.claims.sessionId;
+const role = tokenResult.claims.role;
+
+console.log('Session ID:', sessionId);
+console.log('User role:', role);
+```
+
+The `setSessionId` Cloud Function in TMT API handles session management:
+
+```javascript functions/users/validate_user.js
+exports.setSessionId = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated");
+  }
+
+  const uid = context.auth.uid;
+  const sessionId = data.sessionId;
+
+  // Save to Firestore
+  await admin.firestore().collection("users").doc(uid).set(
+    { sessionId }, 
+    { merge: true }
+  );
+
+  // Set as custom claim
+  await admin.auth().setCustomUserClaims(uid, { sessionId });
+
+  return { success: true };
+});
+```
+
+## Making Authenticated Requests
+
+### Standard HTTP Requests
+
+Include the ID token in the `Authorization` header with the `Bearer` scheme:
+
+<CodeGroup>
+  ```javascript Axios
+  const axios = require('axios');
+
+  class AuthenticatedApiClient {
+    constructor(baseUrl, tokenManager) {
+      this.baseUrl = baseUrl;
+      this.tokenManager = tokenManager;
+    }
+
+    async makeRequest(endpoint, data) {
+      const token = await this.tokenManager.getValidToken();
+      
+      try {
+        const response = await axios.post(
+          `${this.baseUrl}/${endpoint}`,
+          { data },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+        
+        return response.data;
+      } catch (error) {
+        if (error.response?.status === 401) {
+          console.error('Authentication failed. Token may be invalid.');
+        }
+        throw error;
+      }
+    }
+  }
+
+  // Usage
+  const apiClient = new AuthenticatedApiClient(
+    'https://us-central1-your-project.cloudfunctions.net',
+    tokenManager
+  );
+
+  const tickets = await apiClient.makeRequest('tickets_list_event', {
+    event_id: 'event-123'
+  });
+  ```
+
+  ```python Python
+  import requests
+
+  class AuthenticatedApiClient:
+      def __init__(self, base_url, id_token):
+          self.base_url = base_url
+          self.id_token = id_token
+      
+      def make_request(self, endpoint, data):
+          url = f"{self.base_url}/{endpoint}"
+          headers = {
+              "Content-Type": "application/json",
+              "Authorization": f"Bearer {self.id_token}"
+          }
+          
+          response = requests.post(url, json={"data": data}, headers=headers)
+          
+          if response.status_code == 401:
+              raise Exception("Authentication failed. Token may be invalid.")
+          
+          response.raise_for_status()
+          return response.json()
+  
+  # Usage
+  client = AuthenticatedApiClient(
+      "https://us-central1-your-project.cloudfunctions.net",
+      id_token
+  )
+  
+  tickets = client.make_request("tickets_list_event", {"event_id": "event-123"})
+  ```
+
+  ```bash cURL
+  # Get ID token first (using Firebase REST API)
+  ID_TOKEN=$(curl -X POST \
+    "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=YOUR_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "user@example.com",
+      "password": "password123",
+      "returnSecureToken": true
+    }' | jq -r '.idToken')
+
+  # Make authenticated request
+  curl -X POST \
+    "https://us-central1-your-project.cloudfunctions.net/tickets_list_event" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${ID_TOKEN}" \
+    -d '{
+      "data": {
+        "event_id": "event-123"
+      }
+    }'
+  ```
+</CodeGroup>
+
+### Firebase Callable Functions
+
+Some TMT API functions use Firebase's `onCall` trigger, which automatically handles authentication:
+
+```javascript
+const { getFunctions, httpsCallable } = require('firebase/functions');
+
+// Initialize functions
+const functions = getFunctions();
+
+// Call a function (token is sent automatically)
+const setSessionId = httpsCallable(functions, 'setSessionId');
+
+async function updateSession(sessionId) {
+  try {
+    const result = await setSessionId({ sessionId });
+    console.log('Session updated:', result.data);
+    return result.data;
+  } catch (error) {
+    if (error.code === 'unauthenticated') {
+      console.error('User must be authenticated to call this function');
+    }
+    throw error;
+  }
+}
+```
+
+## User Validation
+
+### Validate User Platform
+
+Check if a user exists in a specific platform collection:
+
+```javascript
+const { httpsCallable } = require('firebase/functions');
+
+async function validateUserPlatform(email, platform) {
+  const response = await axios.post(
+    'https://your-region-your-project.cloudfunctions.net/validate_user_platform',
+    {
+      data: {
+        email: email,
+        platform: platform // 'u_clients', 'u_collaborators', or 'u_staff'
+      }
+    }
+  );
+
+  return response.data; // { message: "User allowed", status: 200, data: { valido: true } }
+}
+
+// Usage
+const isValid = await validateUserPlatform('user@example.com', 'u_clients');
+if (isValid.data.valido) {
+  console.log('User is authorized on this platform');
+}
+```
+
+### Validate User Type
+
+Verify a user's account type:
+
+```javascript
+async function validateUserType(email, platform, accountType) {
+  const response = await axios.post(
+    'https://your-region-your-project.cloudfunctions.net/validate_user_type',
+    {
+      data: {
+        email: email,
+        platform: platform,
+        account_type: accountType // e.g., 'business', 'individual', 'enterprise'
+      }
+    }
+  );
+
+  return response.data;
+}
+
+// Usage
+const validation = await validateUserType(
+  'client@example.com',
+  'u_clients',
+  'business'
+);
+
+if (validation.data.valido) {
+  console.log('User has correct account type');
+}
+```
+
+### Validate User Email
+
+Verify and activate a user account by email:
+
+```javascript
+async function validateUserEmail(uid, email) {
+  const response = await axios.post(
+    'https://your-region-your-project.cloudfunctions.net/validate_user_email',
+    {
+      data: {
+        uid_user: uid,
+        email: email
+      }
+    }
+  );
+
+  return response.data; // { message: "Usuario validado y actualizado correctamente.", status: 200 }
+}
+
+// Usage for email verification flow
+const result = await validateUserEmail('user-uid-123', 'user@example.com');
+if (result.status === 200) {
+  console.log('User account activated');
+}
+```
+
+## Security Best Practices
+
+<Warning>
+  Follow these security guidelines to protect your application:
+</Warning>
+
+### 1. Secure Token Storage
+
+<CodeGroup>
+  ```javascript Web (localStorage)
+  // Store token securely
+  async function storeToken(token) {
+    // Use sessionStorage for temporary storage
+    sessionStorage.setItem('firebase_token', token);
+    
+    // For persistent storage, use secure cookies with HttpOnly flag
+    // (requires server-side setup)
+  }
+
+  // Retrieve token
+  function getStoredToken() {
+    return sessionStorage.getItem('firebase_token');
+  }
+
+  // Clear token on logout
+  function clearToken() {
+    sessionStorage.removeItem('firebase_token');
+  }
+  ```
+
+  ```swift iOS (Keychain)
+  import Security
+
+  class KeychainManager {
+      static func saveToken(_ token: String) {
+          let data = token.data(using: .utf8)!
+          let query: [String: Any] = [
+              kSecClass as String: kSecClassGenericPassword,
+              kSecAttrAccount as String: "firebase_token",
+              kSecValueData as String: data
+          ]
+          
+          SecItemDelete(query as CFDictionary)
+          SecItemAdd(query as CFDictionary, nil)
+      }
+      
+      static func getToken() -> String? {
+          let query: [String: Any] = [
+              kSecClass as String: kSecClassGenericPassword,
+              kSecAttrAccount as String: "firebase_token",
+              kSecReturnData as String: true
+          ]
+          
+          var result: AnyObject?
+          SecItemCopyMatching(query as CFDictionary, &result)
+          
+          if let data = result as? Data {
+              return String(data: data, encoding: .utf8)
+          }
+          return nil
+      }
+  }
+  ```
+
+  ```kotlin Android (EncryptedSharedPreferences)
+  import androidx.security.crypto.EncryptedSharedPreferences
+  import androidx.security.crypto.MasterKey
+
+  class SecureTokenManager(context: Context) {
+      private val masterKey = MasterKey.Builder(context)
+          .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+          .build()
+      
+      private val sharedPreferences = EncryptedSharedPreferences.create(
+          context,
+          "secure_prefs",
+          masterKey,
+          EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+          EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+      )
+      
+      fun saveToken(token: String) {
+          sharedPreferences.edit().putString("firebase_token", token).apply()
+      }
+      
+      fun getToken(): String? {
+          return sharedPreferences.getString("firebase_token", null)
+      }
+      
+      fun clearToken() {
+          sharedPreferences.edit().remove("firebase_token").apply()
+      }
+  }
+  ```
+</CodeGroup>
+
+### 2. Token Refresh Strategy
+
+```javascript
+class SecureTokenManager {
+  constructor(auth) {
+    this.auth = auth;
+    this.refreshTimer = null;
+  }
+
+  startAutoRefresh() {
+    // Refresh token every 50 minutes (10 minutes before expiry)
+    this.refreshTimer = setInterval(async () => {
+      try {
+        const user = this.auth.currentUser;
+        if (user) {
+          await user.getIdToken(true);
+          console.log('Token refreshed automatically');
+        }
+      } catch (error) {
+        console.error('Auto-refresh failed:', error);
+      }
+    }, 50 * 60 * 1000);
+  }
+
+  stopAutoRefresh() {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+}
+
+// Usage
+const tokenManager = new SecureTokenManager(auth);
+tokenManager.startAutoRefresh();
+
+// Stop refresh on logout
+auth.signOut().then(() => {
+  tokenManager.stopAutoRefresh();
+});
+```
+
+### 3. Error Handling
+
+```javascript
+class AuthError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+    this.name = 'AuthError';
+  }
+}
+
+async function handleAuthenticatedRequest(endpoint, data) {
+  try {
+    const token = await getValidToken();
+    const response = await axios.post(endpoint, { data }, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 401) {
+      throw new AuthError('INVALID_TOKEN', 'Authentication token is invalid or expired');
+    } else if (error.response?.status === 403) {
+      throw new AuthError('INSUFFICIENT_PERMISSIONS', 'User does not have required permissions');
+    } else if (error.code === 'auth/network-request-failed') {
+      throw new AuthError('NETWORK_ERROR', 'Network connection failed');
+    }
+    throw error;
+  }
+}
+```
+
+### 4. CORS Configuration
+
+TMT API uses CORS to allow cross-origin requests:
+
+```javascript
+const cors = require("cors")({ origin: "*" });
+
+exports.myFunction = functions.https.onRequest(async (request, response) => {
+  cors(request, response, async () => {
+    // Your function logic here
+  });
+});
+```
+
+<Warning>
+  In production, configure CORS to allow only specific origins instead of `"*"`:
+  ```javascript
+  const cors = require("cors")({
+    origin: ["https://yourdomain.com", "https://app.yourdomain.com"]
+  });
+  ```
+</Warning>
+
+### 5. Request Validation
+
+```javascript
+function validateRequestData(data, requiredFields) {
+  const missing = requiredFields.filter(field => !data[field]);
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required fields: ${missing.join(', ')}`);
+  }
+}
+
+// Usage in Cloud Function
+exports.tickets_list_event = functions.https.onRequest(async (req, res) => {
+  cors(req, res, async () => {
+    try {
+      validateRequestData(req.body.data, ['event_id']);
+      
+      // Process request
+      const tickets = await dbpostgres.sqltmt(
+        "select",
+        "tickets",
+        "*",
+        `event_id = '${req.body.data.event_id}'`
+      );
+      
+      res.send({
+        message: tickets.length > 0 ? "Evento Encontrado" : "Evento no Encontrado",
+        status: tickets.length > 0 ? 200 : 400,
+        data: { valido: tickets.length > 0, response: tickets }
+      });
+    } catch (error) {
+      res.status(400).send({
+        message: error.message,
+        status: 400,
+        data: { valido: false }
+      });
+    }
+  });
+});
+```
+
+## Complete Authentication Example
+
+Here's a full authentication flow implementation:
+
+```javascript
+const { initializeApp } = require('firebase/app');
+const { getAuth, signInWithEmailAndPassword, signOut } = require('firebase/auth');
+const axios = require('axios');
+
+class TMTAuthenticatedClient {
+  constructor(firebaseConfig, apiBaseUrl) {
+    const app = initializeApp(firebaseConfig);
+    this.auth = getAuth(app);
+    this.apiBaseUrl = apiBaseUrl;
+    this.currentToken = null;
+  }
+
+  async login(email, password) {
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        this.auth,
+        email,
+        password
+      );
+      
+      this.currentToken = await userCredential.user.getIdToken();
+      console.log('✓ Logged in as:', userCredential.user.email);
+      
+      return {
+        user: userCredential.user,
+        token: this.currentToken
+      };
+    } catch (error) {
+      console.error('Login failed:', error.code, error.message);
+      throw error;
+    }
+  }
+
+  async logout() {
+    await signOut(this.auth);
+    this.currentToken = null;
+    console.log('✓ Logged out');
+  }
+
+  async refreshToken() {
+    const user = this.auth.currentUser;
+    if (!user) {
+      throw new Error('No user logged in');
+    }
+    
+    this.currentToken = await user.getIdToken(true);
+    return this.currentToken;
+  }
+
+  async callApi(endpoint, data) {
+    if (!this.currentToken) {
+      throw new Error('Not authenticated. Please login first.');
+    }
+
+    try {
+      const response = await axios.post(
+        `${this.apiBaseUrl}/${endpoint}`,
+        { data },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.currentToken}`
+          }
+        }
+      );
+      
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        console.log('Token expired, refreshing...');
+        await this.refreshToken();
+        return this.callApi(endpoint, data); // Retry
+      }
+      throw error;
+    }
+  }
+}
+
+// Usage
+async function main() {
+  const client = new TMTAuthenticatedClient(
+    {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "your-project.firebaseapp.com",
+      projectId: "your-project-id",
+      storageBucket: "your-project.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "YOUR_APP_ID"
+    },
+    'https://us-central1-your-project.cloudfunctions.net'
+  );
+
+  try {
+    // Login
+    await client.login('user@example.com', 'password123');
+
+    // Make authenticated API calls
+    const tickets = await client.callApi('tickets_list_event', {
+      event_id: 'event-123'
+    });
+    console.log('Tickets:', tickets.data.response);
+
+    // Validate user
+    const validation = await client.callApi('validate_user_type', {
+      email: 'user@example.com',
+      platform: 'u_clients',
+      account_type: 'business'
+    });
+    console.log('User valid:', validation.data.valido);
+
+    // Logout
+    await client.logout();
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+}
+
+main();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Management" icon="users" href="/guides/user-management">
+    Learn about user roles and permissions
+  </Card>
+  <Card title="Create Client" icon="user-plus" href="/api/users/create-client">
+    Create client accounts with authentication
+  </Card>
+  <Card title="Event Setup" icon="calendar" href="/guides/event-setup">
+    Set up events with proper access control
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/architecture">
+    Understand the system architecture
+  </Card>
+</CardGroup>
+
+<Note>
+  **Need help with authentication?** Check the [Firebase Authentication documentation](https://firebase.google.com/docs/auth) or visit our [user management guide](/guides/user-management).
+</Note>

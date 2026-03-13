@@ -1,0 +1,742 @@
+---
+title: 'Access Control'
+description: 'Implement event entry and exit tracking, credential management, and checkpoint systems'
+icon: 'door-open'
+---
+
+Access control is essential for managing event entry, exit, and overall security. This guide covers ticket validation, entry/exit tracking, credential management, and checkpoint configuration.
+
+## Access Control Components
+
+The TMT access control system includes:
+
+- **Ticket Scanning**: Validate tickets at entry points
+- **Entry/Exit Tracking**: Monitor attendee movement
+- **Credentials**: Manage staff and VIP access
+- **Checkpoints**: Configure multiple access points
+- **Offline Sync**: Support for offline operations
+
+## Access Control Flow
+
+<Steps>
+  <Step title="Scan Ticket">
+    Scan the ticket QR code or enter ticket ID manually.
+  </Step>
+  
+  <Step title="Validate Ticket">
+    System checks ticket validity and purchase status.
+  </Step>
+  
+  <Step title="Record Entry">
+    Log entry with timestamp and checkpoint information.
+  </Step>
+  
+  <Step title="Update Ticket Status">
+    Mark ticket as accessed in ledger.
+  </Step>
+  
+  <Step title="Allow/Deny Entry">
+    Grant or deny access based on validation result.
+  </Step>
+</Steps>
+
+## Ticket Entry Control
+
+### Check In (Entry)
+
+Validate and record ticket entry:
+
+```javascript
+const ticketEntry = {
+  data: {
+    ticket_id: "evt_2024_concert_001-abc123xyz"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/tickets_access_control_in',
+  ticketEntry
+);
+```
+
+### Entry Validation Logic
+
+The system performs these checks:
+
+1. **Ticket Exists**: Verify ticket ID is valid
+2. **Ticket Sold**: Confirm ticket has been purchased (`status: false`)
+3. **Not Previously Used**: Check if ticket already accessed
+4. **Re-entry Allowed**: Allow re-entry if user exited previously
+
+### Entry Response Scenarios
+
+<CodeGroup>
+```json First Entry - Success
+{
+  "message": "Ticket Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Ticket Ingresando"
+  }
+}
+```
+
+```json Re-Entry - Success
+{
+  "message": "Ticket ReIngreso",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Ticket ReIngreso"
+  }
+}
+```
+
+```json Already Inside - Error
+{
+  "message": "Ticket ya Utilizado no puede volver Ingresar",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Ticket ya Utilizado no puede volver Ingresar"
+  }
+}
+```
+
+```json Invalid Ticket - Error
+{
+  "message": "Ticket no valido",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Ticket no valido"
+  }
+}
+```
+</CodeGroup>
+
+<Tip>
+The system distinguishes between first entry and re-entry. Customers can exit and re-enter if allowed by your event policy.
+</Tip>
+
+## Ticket Exit Control
+
+### Check Out (Exit)
+
+Record ticket exit:
+
+```javascript
+const ticketExit = {
+  data: {
+    ticket_id: "evt_2024_concert_001-abc123xyz"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/tickets_access_control_out',
+  ticketExit
+);
+```
+
+### Exit Response Scenarios
+
+<CodeGroup>
+```json Exit - Success
+{
+  "message": "Ticket Salida",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Ticket Salida"
+  }
+}
+```
+
+```json Never Entered - Error
+{
+  "message": "Ticket no Ingreso no puede salir",
+  "status": 400,
+  "data": {
+    "valido": false,
+    "message": "Ticket no Ingreso no puede salir"
+  }
+}
+```
+</CodeGroup>
+
+## Access Status Tracking
+
+Each ticket has two access flags:
+
+- `access_status`: Has the ticket been used at least once?
+- `access_entry`: Is the ticket holder currently inside the venue?
+
+### Status States
+
+| access_status | access_entry | State |
+|---------------|--------------|-------|
+| false | false | Never entered |
+| true | true | Currently inside |
+| true | false | Inside then left (can re-enter) |
+
+## List Access Control Tickets
+
+Retrieve all sold tickets for access control interface:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/tickets_list_access_control',
+  {
+    data: {
+      event_id: "evt_2024_concert_001"
+    }
+  }
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Evento Encontrado",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "response": [
+      {
+        "ticket_id": "evt_2024_concert_001-abc123xyz",
+        "event_name": "Summer Music Festival 2024",
+        "customer_email": "customer@example.com",
+        "customer_name": "John Doe",
+        "customer_phone": "+58424123456",
+        "zone": "VIP",
+        "seat_id": "vip-1",
+        "status": false,
+        "access_status": false,
+        "access_entry": false,
+        "ledger": [
+          {
+            "date": "2024-03-10T10:00:00Z",
+            "action": "generated",
+            "metadata": ""
+          },
+          {
+            "date": "2024-03-11T14:30:00Z",
+            "action": "sold",
+            "metadata": "{}"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Offline Access Control
+
+For events without reliable internet, support offline ticket scanning with later synchronization:
+
+### Sync Offline Scans
+
+```javascript
+const offlineScans = {
+  data: {
+    tickets_cold: [
+      {
+        ticket_id: "evt_2024_concert_001-abc123xyz",
+        date: "2024-07-15T18:30:00Z",
+        tipo: "in"
+      },
+      {
+        ticket_id: "evt_2024_concert_001-abc123xyz",
+        date: "2024-07-15T20:15:00Z",
+        tipo: "out"
+      },
+      {
+        ticket_id: "evt_2024_concert_001-abc123xyz",
+        date: "2024-07-15T20:45:00Z",
+        tipo: "in"
+      },
+      {
+        ticket_id: "evt_2024_concert_001-def456uvw",
+        date: "2024-07-15T18:45:00Z",
+        tipo: "in"
+      }
+    ]
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/tickets_access_control_cold',
+  offlineScans
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Tickets Frios Sincronizados",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Tickets Frios Sincronizados"
+  }
+}
+```
+
+<Warning>
+The system processes multiple entries/exits for the same ticket and determines the final state (inside or outside) based on the last action.
+</Warning>
+
+## Credential Management
+
+Manage access credentials for staff, VIPs, and special guests:
+
+### List Event Credentials
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/events_list_credentials',
+  {
+    data: {
+      event_id: "evt_2024_concert_001"
+    }
+  }
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Credenciales encontradas",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "credenciales": [
+      {
+        "id": "cred_001",
+        "name": "Backstage Pass",
+        "description": "Full backstage access",
+        "holder": {
+          "name": "Jane Smith",
+          "id": "V23456789",
+          "role": "Stage Manager"
+        },
+        "access": ["backstage", "vip_area", "general"],
+        "status": true,
+        "date_created": "2024-03-01T10:00:00Z"
+      },
+      {
+        "id": "cred_002",
+        "name": "Security Badge",
+        "description": "Security personnel access",
+        "holder": {
+          "name": "Carlos Rodriguez",
+          "id": "V34567890",
+          "role": "Security"
+        },
+        "access": ["all_areas"],
+        "status": true,
+        "date_created": "2024-03-01T10:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Credential Check-In
+
+Validate credential entry:
+
+```javascript
+const credentialEntry = {
+  data: {
+    event_id: "evt_2024_concert_001",
+    credential_id: "cred_001",
+    holder_id: "V23456789"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/credentials_access_control_in',
+  credentialEntry
+);
+```
+
+### Credential Entry Responses
+
+<CodeGroup>
+```json First Entry
+{
+  "message": "Credencial valida Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Ingresando"
+  }
+}
+```
+
+```json Re-Entry
+{
+  "message": "Credencial valida Re-Ingresando",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "message": "Credencial valida Re-Ingresando"
+  }
+}
+```
+
+```json Already Inside
+{
+  "message": "Credencial ya Entro",
+  "status": 200,
+  "data": {
+    "valido": false,
+    "message": "Credencial ya Entro"
+  }
+}
+```
+</CodeGroup>
+
+### Credential Check-Out
+
+Record credential exit:
+
+```javascript
+const credentialExit = {
+  data: {
+    event_id: "evt_2024_concert_001",
+    credential_id: "cred_001",
+    holder_id: "V23456789"
+  }
+};
+
+const response = await axios.post(
+  'https://your-api-url/credentials_access_control_out',
+  credentialExit
+);
+```
+
+## Checkpoint Management
+
+Configure multiple checkpoints for large events:
+
+### List Collaborator Checkpoints
+
+Retrieve checkpoints assigned to a collaborator:
+
+```javascript
+const response = await axios.post(
+  'https://your-api-url/events_list_checkpoints',
+  {
+    data: {
+      userd_id: "collaborator_uid_here"
+    }
+  }
+);
+```
+
+### Response
+
+```json
+{
+  "message": "Eventos encontrados",
+  "status": 200,
+  "data": {
+    "valido": true,
+    "eventos": [
+      {
+        "event_id": "evt_2024_concert_001",
+        "name": "Summer Music Festival 2024",
+        "date_start": "2024-07-15T18:00:00Z",
+        "date_end": "2024-07-15T23:59:00Z",
+        "type": "main_entrance",
+        "status": "Activo",
+        "event": {
+          "media": {
+            "poster": "https://example.com/poster.jpg"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+## Building an Access Control Interface
+
+Here's a complete example of an access control scanner:
+
+```javascript
+class AccessControlScanner {
+  constructor(eventId) {
+    this.eventId = eventId;
+    this.offlineQueue = [];
+  }
+  
+  async scanTicket(ticketId) {
+    try {
+      const response = await axios.post(
+        'https://your-api-url/tickets_access_control_in',
+        {
+          data: { ticket_id: ticketId }
+        }
+      );
+      
+      if (response.data.status === 200) {
+        this.displaySuccess(response.data.data.message);
+        this.logEntry(ticketId, 'in');
+        return true;
+      } else {
+        this.displayError(response.data.data.message);
+        return false;
+      }
+    } catch (error) {
+      // Network error - add to offline queue
+      this.offlineQueue.push({
+        ticket_id: ticketId,
+        date: new Date().toISOString(),
+        tipo: 'in'
+      });
+      this.displayWarning('Offline mode - scan queued');
+      return true; // Allow entry in offline mode
+    }
+  }
+  
+  async scanExit(ticketId) {
+    try {
+      const response = await axios.post(
+        'https://your-api-url/tickets_access_control_out',
+        {
+          data: { ticket_id: ticketId }
+        }
+      );
+      
+      if (response.data.status === 200) {
+        this.displaySuccess('Exit recorded');
+        this.logEntry(ticketId, 'out');
+        return true;
+      }
+    } catch (error) {
+      this.offlineQueue.push({
+        ticket_id: ticketId,
+        date: new Date().toISOString(),
+        tipo: 'out'
+      });
+      return true;
+    }
+  }
+  
+  async syncOfflineScans() {
+    if (this.offlineQueue.length === 0) return;
+    
+    try {
+      const response = await axios.post(
+        'https://your-api-url/tickets_access_control_cold',
+        {
+          data: {
+            tickets_cold: this.offlineQueue
+          }
+        }
+      );
+      
+      if (response.data.status === 200) {
+        console.log(`Synced ${this.offlineQueue.length} offline scans`);
+        this.offlineQueue = [];
+      }
+    } catch (error) {
+      console.error('Sync failed, will retry later');
+    }
+  }
+  
+  displaySuccess(message) {
+    console.log('✓ ' + message);
+    // Update UI with green indicator
+  }
+  
+  displayError(message) {
+    console.error('✗ ' + message);
+    // Update UI with red indicator
+  }
+  
+  displayWarning(message) {
+    console.warn('⚠ ' + message);
+    // Update UI with yellow indicator
+  }
+  
+  logEntry(ticketId, direction) {
+    const log = {
+      ticket_id: ticketId,
+      direction: direction,
+      timestamp: new Date().toISOString()
+    };
+    // Store in local database for reporting
+  }
+}
+
+// Usage
+const scanner = new AccessControlScanner('evt_2024_concert_001');
+
+// Scan ticket
+await scanner.scanTicket('evt_2024_concert_001-abc123xyz');
+
+// Periodically sync offline scans
+setInterval(() => {
+  scanner.syncOfflineScans();
+}, 60000); // Every minute
+```
+
+## Access Control Analytics
+
+### Real-Time Attendance
+
+```javascript
+const getAttendance = async (eventId) => {
+  const tickets = await db.collection('events')
+    .doc(eventId)
+    .collection('tickets')
+    .where('status', '==', false)
+    .get();
+  
+  let totalSold = 0;
+  let currentlyInside = 0;
+  let totalEntered = 0;
+  
+  tickets.forEach(ticket => {
+    const data = ticket.data();
+    totalSold++;
+    if (data.access_status) totalEntered++;
+    if (data.access_entry) currentlyInside++;
+  });
+  
+  return {
+    total_sold: totalSold,
+    total_entered: totalEntered,
+    currently_inside: currentlyInside,
+    entry_rate: (totalEntered / totalSold * 100).toFixed(1) + '%'
+  };
+};
+```
+
+### Entry Rate by Zone
+
+```javascript
+const getEntryRateByZone = async (eventId) => {
+  const tickets = await db.collection('events')
+    .doc(eventId)
+    .collection('tickets')
+    .where('status', '==', false)
+    .get();
+  
+  const zones = {};
+  
+  tickets.forEach(ticket => {
+    const data = ticket.data();
+    if (!zones[data.zone]) {
+      zones[data.zone] = { sold: 0, entered: 0 };
+    }
+    zones[data.zone].sold++;
+    if (data.access_status) zones[data.zone].entered++;
+  });
+  
+  return Object.keys(zones).map(zone => ({
+    zone: zone,
+    sold: zones[zone].sold,
+    entered: zones[zone].entered,
+    entry_rate: (zones[zone].entered / zones[zone].sold * 100).toFixed(1) + '%'
+  }));
+};
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test Equipment" icon="mobile">
+    Test scanners and devices thoroughly before the event starts.
+  </Card>
+  
+  <Card title="Offline Support" icon="wifi-slash">
+    Always implement offline mode for unreliable network conditions.
+  </Card>
+  
+  <Card title="Clear Signage" icon="signs-post">
+    Display clear instructions at each checkpoint for smooth flow.
+  </Card>
+  
+  <Card title="Staff Training" icon="graduation-cap">
+    Train staff on handling various scenarios (re-entry, invalid tickets, etc.).
+  </Card>
+</CardGroup>
+
+## Common Access Control Scenarios
+
+### Scenario 1: Re-Entry Policy
+
+```javascript
+// Allow re-entry
+const allowReentry = async (ticketId) => {
+  // User exits
+  await scanner.scanExit(ticketId);
+  
+  // Later, user returns
+  await scanner.scanTicket(ticketId);
+  // System allows re-entry automatically
+};
+```
+
+### Scenario 2: VIP Fast Track
+
+```javascript
+const vipCheckpoint = async (credentialId) => {
+  const response = await axios.post(
+    'https://your-api-url/credentials_access_control_in',
+    {
+      data: {
+        event_id: eventId,
+        credential_id: credentialId,
+        holder_id: holderId
+      }
+    }
+  );
+  
+  if (response.data.data.valido) {
+    // Grant immediate access
+    openGate();
+  }
+};
+```
+
+### Scenario 3: Duplicate Scan Prevention
+
+```javascript
+const preventDuplicate = async (ticketId) => {
+  const response = await axios.post(
+    'https://your-api-url/tickets_access_control_in',
+    { data: { ticket_id: ticketId } }
+  );
+  
+  if (response.data.status === 400) {
+    // Ticket already inside
+    alert('This ticket is already being used inside the venue');
+    // Sound alarm or notify security
+    securityAlert(ticketId);
+  }
+};
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Management" icon="users" href="/guides/user-management">
+    Manage customer profiles and preferences
+  </Card>
+  
+  <Card title="Event Setup" icon="calendar" href="/guides/event-setup">
+    Create and configure events
+  </Card>
+</CardGroup>

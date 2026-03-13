@@ -1,0 +1,335 @@
+---
+title: 'Process Order'
+api: 'TRIGGER onDocumentCreated("orders/{id}")'
+description: 'Automatically processes orders, updates tickets, creates transactions, and distributes payments'
+---
+
+## Overview
+
+The `order_process` function is a Firestore trigger that automatically executes when a new order document is created. It handles the complete order processing workflow including ticket updates, transaction generation, and payment distribution.
+
+<Warning>
+  This is an automatic background process triggered by order creation. Do not call this function directly.
+</Warning>
+
+## Processing Flow
+
+When an order is created, the following steps occur automatically:
+
+1. **Validation** - Verifies order status and transaction amounts
+2. **Ticket Update** - Updates ticket status and customer information
+3. **Transaction Creation** - Calls `transactions_generate` to create transaction records
+4. **User Account Creation** - Creates or updates user account via `order_user`
+5. **Payment Distribution** - Calculates and creates payout records based on cost structure
+
+## Payment Distribution Logic
+
+The function implements a sophisticated payment split algorithm:
+
+### Fixed Costs
+
+Fixed costs are collected first from incoming payments:
+
+- If remaining fixed costs >= order amount: 100% goes to fixed costs
+- If remaining fixed costs < order amount: Proportional split between fixed and variable
+
+### Variable Costs
+
+After fixed costs are covered, variable costs are distributed:
+
+- **TMT Variable Costs** - Platform fees and operational costs
+- **Client Variable Costs** - Event organizer's share
+
+<Warning>
+  Payment distribution only occurs for non-TMT point of sale transactions. TMT POS transactions are handled separately through the conciliation process.
+</Warning>
+
+## Order Data Structure
+
+The function processes orders with the following structure:
+
+<ParamField path="status" type="string">
+  Order status (must be truthy to process)
+</ParamField>
+
+<ParamField path="amount" type="number">
+  Total order amount
+</ParamField>
+
+<ParamField path="transactions" type="array">
+  Array of payment transactions
+  
+  <ParamField path="amount" type="number">
+    Transaction amount
+  </ParamField>
+  
+  <ParamField path="status" type="boolean">
+    Transaction success status
+  </ParamField>
+  
+  <ParamField path="custody_account" type="object">
+    Custody account details
+  </ParamField>
+  
+  <ParamField path="point_sale_tmt" type="boolean">
+    Whether this uses TMT point of sale
+  </ParamField>
+  
+  <ParamField path="amount_exchange" type="number">
+    Amount in exchange currency
+  </ParamField>
+  
+  <ParamField path="amount_currency" type="string">
+    Currency code (USD, VEF, etc.)
+  </ParamField>
+</ParamField>
+
+<ParamField path="tickets" type="array">
+  Array of tickets in the order
+  
+  <ParamField path="ticket_id" type="string">
+    Ticket identifier
+  </ParamField>
+  
+  <ParamField path="status" type="boolean">
+    Ticket status
+  </ParamField>
+  
+  <ParamField path="metadata" type="object">
+    Customer information
+  </ParamField>
+</ParamField>
+
+<ParamField path="event_id" type="string">
+  Event identifier
+</ParamField>
+
+<ParamField path="client_id" type="string">
+  Client identifier
+</ParamField>
+
+## Payout Records Created
+
+For each transaction, the function may create multiple payout records:
+
+<ResponseField name="amount" type="number">
+  Payout amount
+</ResponseField>
+
+<ResponseField name="custody_account" type="object">
+  Account receiving the payout
+  
+  <ResponseField name="id" type="string">
+    Account ID
+  </ResponseField>
+  
+  <ResponseField name="name" type="string">
+    Account name
+  </ResponseField>
+  
+  <ResponseField name="account_number" type="string">
+    Account number
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Payout description ("Pago Costo Fijo" or "Pago Costo Variable")
+</ResponseField>
+
+<ResponseField name="entity" type="string">
+  Entity receiving payment ("TMT" or "Cliente")
+</ResponseField>
+
+<ResponseField name="payout_status" type="boolean">
+  Whether payout has been completed (initially false)
+</ResponseField>
+
+<ResponseField name="payout_type" type="string">
+  Payout type ("Manual" or "Automatic")
+</ResponseField>
+
+<ResponseField name="order_id" type="string">
+  Associated order ID
+</ResponseField>
+
+<ResponseField name="event_id" type="string">
+  Associated event ID
+</ResponseField>
+
+<ResponseField name="payment_id" type="string">
+  Original payment method ID
+</ResponseField>
+
+<ResponseField name="amount_exchange" type="number">
+  Amount in exchange currency
+</ResponseField>
+
+<ResponseField name="amount_currency" type="string">
+  Currency code
+</ResponseField>
+
+## Distribution Array
+
+The order document is updated with a `distribution` array containing:
+
+```javascript
+{
+  "distribution": [
+    {
+      "amount": 50.00,
+      "description": "Pago Costo Fijo",
+      "entity": "TMT",
+      "payout_id": "payout_123"
+    },
+    {
+      "amount": 30.00,
+      "description": "Pago Costo Variable",
+      "entity": "TMT",
+      "payout_id": "payout_124"
+    },
+    {
+      "amount": 70.00,
+      "description": "Pago Costo Variable",
+      "entity": "Cliente",
+      "payout_id": "payout_125"
+    }
+  ]
+}
+```
+
+## Code Examples
+
+<CodeGroup>
+
+```javascript Understanding the Process
+// This function is triggered automatically
+// Example of what happens behind the scenes:
+
+const processOrder = async (orderId, orderData) => {
+  // 1. Validate order
+  if (!orderData.status) {
+    console.log('Order not ready for processing');
+    return;
+  }
+  
+  // 2. Calculate payment distribution
+  const financialSetup = await getEventFinancialSetup(orderData.event_id);
+  const distribution = calculateDistribution(
+    orderData.amount,
+    orderData.transactions,
+    financialSetup
+  );
+  
+  // 3. Update tickets with customer info
+  for (const ticket of orderData.tickets) {
+    await updateTicket(ticket.ticket_id, ticket.metadata);
+  }
+  
+  // 4. Create transaction records
+  await createTransactions({
+    orderId: orderId,
+    transactions: orderData.transactions,
+    tickets: orderData.tickets
+  });
+  
+  // 5. Create payout records
+  for (const payout of distribution) {
+    await createPayoutRecord(payout);
+  }
+  
+  // 6. Update order with distribution
+  await updateOrder(orderId, { distribution });
+};
+```
+
+```javascript Monitoring Order Processing
+// You can monitor order processing status
+const checkOrderProcessing = async (orderId) => {
+  const orderRef = db.collection('orders').doc(orderId);
+  const order = await orderRef.get();
+  const data = order.data();
+  
+  if (data.distribution && data.distribution.length > 0) {
+    console.log('Order processed successfully');
+    console.log('Distribution:', data.distribution);
+    
+    // Check payout status
+    const payouts = await db.collection('orders_payout')
+      .where('order_id', '==', orderId)
+      .get();
+    
+    payouts.forEach(payout => {
+      const payoutData = payout.data();
+      console.log(`${payoutData.entity}: $${payoutData.amount} - Status: ${payoutData.payout_status}`);
+    });
+  } else {
+    console.log('Order still processing...');
+  }
+};
+```
+
+</CodeGroup>
+
+## Financial Setup Requirements
+
+The event must have a financial setup document at:
+`events/{event_id}/setup/financial`
+
+Required fields:
+
+<ParamField path="fixed_cost_balance" type="number">
+  Total fixed costs for the event
+</ParamField>
+
+<ParamField path="fixed_cost_collected" type="number">
+  Amount of fixed costs already collected
+</ParamField>
+
+<ParamField path="costs_fixed" type="array">
+  Array of fixed cost items
+  
+  <ParamField path="name" type="string">
+    Cost name
+  </ParamField>
+  
+  <ParamField path="value_total" type="number">
+    Total cost amount
+  </ParamField>
+</ParamField>
+
+<ParamField path="costs_variables" type="array">
+  Array of variable cost percentages
+  
+  <ParamField path="name" type="string">
+    Cost name
+  </ParamField>
+  
+  <ParamField path="entity" type="string">
+    "TMT" or "Cliente"
+  </ParamField>
+  
+  <ParamField path="value" type="number">
+    Percentage (0-100)
+  </ParamField>
+</ParamField>
+
+<Warning>
+  Variable cost percentages for TMT and Cliente must sum to 100%. Invalid cost structures will cause distribution errors.
+</Warning>
+
+## Related Functions
+
+- [Create Order](/api/orders/order-created) - Creates the order that triggers this function
+- [Order Payout](/api/orders/order-payout) - Processes payout records created by this function
+- [Generate Transactions](/api/transactions/transactions-generate) - Called by this function to create transaction records
+
+## Error Handling
+
+The function silently returns in the following cases:
+- Order has no status
+- Order snapshot is empty
+- Transaction sum doesn't match order amount (commented out in code)
+
+<Warning>
+  Failed order processing does not create error records. Monitor order documents for missing `distribution` fields to identify processing failures.
+</Warning>

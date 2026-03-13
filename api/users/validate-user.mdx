@@ -1,0 +1,314 @@
+---
+title: "Validate User"
+api: "POST https://your-project.cloudfunctions.net/validate_user_email"
+description: "Validate a user's email address and activate their account"
+---
+
+## Available Endpoints
+
+This API provides multiple validation endpoints:
+
+- `validate_user_platform` - Validates if a user exists in a specific platform collection
+- `validate_user_type` - Validates if a user exists with a specific account type
+- `validate_user_email` - Validates email and activates user account
+
+## Validate User Email
+
+Validates that a user's email matches their account and activates the user by setting their status to true.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Validation data container object
+  
+  <ParamField body="data.uid_user" type="string" required>
+    The unique identifier of the user to validate
+  </ParamField>
+  
+  <ParamField body="data.email" type="string" required>
+    The email address to validate against the user's account
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="data.message" type="string">
+    Success or error message
+  </ResponseField>
+  
+  <ResponseField name="data.status" type="number">
+    HTTP status code
+  </ResponseField>
+</ResponseField>
+
+### Request Example
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/validate_user_email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "uid_user": "def456uvw789",
+      "email": "john.smith@acmecorp.com"
+    }
+  }'
+```
+
+```javascript JavaScript
+const validateUserEmail = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/validate_user_email',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          uid_user: 'def456uvw789',
+          email: 'john.smith@acmecorp.com'
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+### Response Example
+
+<ResponseExample>
+
+```json Success Response
+{
+  "data": {
+    "message": "Usuario validado y actualizado correctamente.",
+    "status": 200
+  }
+}
+```
+
+```json Error - Missing Parameters
+{
+  "data": {
+    "message": "El UID y el correo son obligatorios.",
+    "status": 400
+  }
+}
+```
+
+```json Error - User Not Found
+{
+  "data": {
+    "message": "Usuario no encontrado.",
+    "status": 404
+  }
+}
+```
+
+```json Error - Email Mismatch
+{
+  "data": {
+    "message": "El correo electrónico no coincide.",
+    "status": 403
+  }
+}
+```
+
+</ResponseExample>
+
+### Error Codes
+
+| Status Code | Description |
+| --- | --- |
+| 200 | User validated and activated successfully |
+| 400 | Missing required parameters (uid_user or email) |
+| 403 | Email does not match user account |
+| 404 | User not found in database |
+| 500 | Internal server error |
+
+---
+
+## Validate User Platform
+
+Checks if a user exists in a specific platform collection.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Validation data container object
+  
+  <ParamField body="data.platform" type="string" required>
+    The collection name to search in (e.g., "u_clients", "u_staff", "u_collaborators")
+  </ParamField>
+  
+  <ParamField body="data.email" type="string" required>
+    The email address to validate
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success or error message ("User allowed" or "User not allowed")
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for allowed, 400 for not allowed)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data container
+  
+  <ResponseField name="data.valido" type="boolean">
+    True if user is allowed, false otherwise
+  </ResponseField>
+</ResponseField>
+
+### Request Example
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/validate_user_platform \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "platform": "u_clients",
+      "email": "contact@acmecorp.com"
+    }
+  }'
+```
+
+```javascript JavaScript
+const validateUserPlatform = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/validate_user_platform',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          platform: 'u_clients',
+          email: 'contact@acmecorp.com'
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+### Response Example
+
+<ResponseExample>
+
+```json User Allowed
+{
+  "message": "User allowed",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+```json User Not Allowed
+{
+  "message": "User not allowed",
+  "status": 400,
+  "data": {
+    "valido": false
+  }
+}
+```
+
+</ResponseExample>
+
+---
+
+## Validate User Type
+
+Validates if a user exists with a specific account type.
+
+### Request Body
+
+<ParamField body="data" type="object" required>
+  Validation data container object
+  
+  <ParamField body="data.platform" type="string" required>
+    The collection name to search in
+  </ParamField>
+  
+  <ParamField body="data.email" type="string" required>
+    The email address to validate
+  </ParamField>
+  
+  <ParamField body="data.account_type" type="string" required>
+    The account type to match
+  </ParamField>
+</ParamField>
+
+### Request Example
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://your-project.cloudfunctions.net/validate_user_type \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "platform": "u_staff",
+      "email": "jane.doe@company.com",
+      "account_type": "admin"
+    }
+  }'
+```
+
+```javascript JavaScript
+const validateUserType = async () => {
+  const response = await fetch(
+    'https://your-project.cloudfunctions.net/validate_user_type',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          platform: 'u_staff',
+          email: 'jane.doe@company.com',
+          account_type: 'admin'
+        }
+      })
+    }
+  );
+  
+  const result = await response.json();
+  return result;
+};
+```
+
+</RequestExample>
+
+<Note>
+  - `validate_user_email` updates the user's status to `true` in the `u_collaborators` collection upon successful validation
+  - `validate_user_platform` only checks for user existence in the specified collection
+  - `validate_user_type` performs a compound query checking both email and account type
+  - All validation endpoints use CORS with wildcard origin (*)
+</Note>

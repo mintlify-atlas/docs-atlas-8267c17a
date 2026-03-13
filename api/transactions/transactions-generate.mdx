@@ -1,0 +1,425 @@
+---
+title: 'Generate Transactions'
+api: 'POST https://api.tmt.com/transactions_generate'
+description: 'Creates transaction records, updates ticket status, and links tickets to user accounts'
+---
+
+## Overview
+
+The `transactions_generate` endpoint creates transaction records for an order, updates ticket statuses to sold, and associates tickets with user accounts. This function is typically called automatically by the `order_process` function.
+
+<Warning>
+  This endpoint is designed to be called by the order processing system. Manual calls should be avoided unless you're implementing custom order workflows.
+</Warning>
+
+## Processing Flow
+
+1. **Create Transaction Records** - Stores transactions in `orders_transactions` collection
+2. **Create Custody Account Transactions** - Links transactions to custody accounts
+3. **Update Ticket Status** - Marks tickets as sold and updates ledger
+4. **Link to User Account** - Associates tickets with user's account
+
+## Request Body
+
+<ParamField body="idorder_id" type="string" required>
+  The order identifier
+</ParamField>
+
+<ParamField body="TransactionData" type="array" required>
+  Array of transaction objects to create
+  
+  <ParamField body="amount" type="number">
+    Transaction amount
+  </ParamField>
+  
+  <ParamField body="client_id" type="string">
+    Client identifier
+  </ParamField>
+  
+  <ParamField body="client_name" type="string">
+    Client name
+  </ParamField>
+  
+  <ParamField body="event_id" type="string">
+    Event identifier
+  </ParamField>
+  
+  <ParamField body="event_name" type="string">
+    Event name
+  </ParamField>
+  
+  <ParamField body="office_id" type="string">
+    Office identifier
+  </ParamField>
+  
+  <ParamField body="office_name" type="string">
+    Office name
+  </ParamField>
+  
+  <ParamField body="payment_data" type="object">
+    Payment method specific data
+  </ParamField>
+  
+  <ParamField body="payment_id" type="string">
+    Payment method identifier
+  </ParamField>
+  
+  <ParamField body="payment_name" type="string">
+    Payment method name
+  </ParamField>
+  
+  <ParamField body="status" type="boolean">
+    Transaction status
+  </ParamField>
+  
+  <ParamField body="custody_account" type="object">
+    Custody account object
+    
+    <ParamField body="id" type="string">
+      Account ID
+    </ParamField>
+    
+    <ParamField body="name" type="string">
+      Account name
+    </ParamField>
+    
+    <ParamField body="account_number" type="string">
+      Account number
+    </ParamField>
+  </ParamField>
+  
+  <ParamField body="amount_currency" type="string">
+    Currency code
+  </ParamField>
+  
+  <ParamField body="amount_exchange" type="number">
+    Amount in exchange currency
+  </ParamField>
+  
+  <ParamField body="amount_exchange_rate" type="number">
+    Exchange rate used
+  </ParamField>
+  
+  <ParamField body="point_sale_tmt" type="boolean">
+    Whether this is a TMT point of sale transaction
+  </ParamField>
+</ParamField>
+
+<ParamField body="infotickets" type="array" required>
+  Array of ticket IDs (format: "event_id-ticket_id")
+</ParamField>
+
+<ParamField body="event_id" type="string" required>
+  Event identifier for the tickets
+</ParamField>
+
+<ParamField body="customer_email" type="string" required>
+  Customer email address for account linking
+</ParamField>
+
+<ParamField body="users_uid" type="string" required>
+  User UID (can be "1" if not yet determined)
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message: "Pago procesado"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Response data
+  
+  <ResponseField name="valido" type="boolean">
+    Validation status (true on success)
+  </ResponseField>
+</ResponseField>
+
+## Transaction Record Structure
+
+Each transaction is stored with the following structure:
+
+```javascript
+{
+  id: "trans_123",
+  amount: 150.00,
+  client_id: "client_789",
+  client_name: "Event Productions LLC",
+  custody_account: {
+    id: "acc_001",
+    name: "Main Account",
+    account_number: "1234567890"
+  },
+  date: {
+    created: Timestamp,
+    updated: Timestamp
+  },
+  event_id: "evt_123",
+  event_name: "Summer Concert",
+  office_id: "off_001",
+  office_name: "Main Office",
+  order_id: "order_456",
+  payment_data: {
+    email: "john@example.com",
+    name: "John Doe",
+    phone: "+1234567890"
+  },
+  payment_id: "pay_card_001",
+  payment_name: "Credit Card",
+  status: true,
+  amount_currency: "USD",
+  amount_exchange: 150.00,
+  amount_exchange_rate: 1.0
+}
+```
+
+## Ticket Ledger Updates
+
+When tickets are marked as sold, their ledger is updated with a new entry:
+
+```javascript
+{
+  date: Timestamp,
+  action: "sold",
+  metadata: "{}"
+}
+```
+
+The ledger maintains a complete history of ticket state changes:
+- `created` - Ticket was created
+- `reserved` - Ticket was reserved
+- `sold` - Ticket was sold (added by this function)
+- `cancelled` - Ticket sale was cancelled
+- `used` - Ticket was scanned/used for entry
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.tmt.com/transactions_generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "idorder_id": "order_123",
+      "TransactionData": [
+        {
+          "amount": 150.00,
+          "client_id": "client_789",
+          "client_name": "Event Productions LLC",
+          "event_id": "evt_123",
+          "event_name": "Summer Concert 2024",
+          "office_id": "off_001",
+          "office_name": "Main Office",
+          "payment_data": {
+            "email": "john@example.com",
+            "name": "John Doe",
+            "phone": "+1234567890"
+          },
+          "payment_id": "pay_card_001",
+          "payment_name": "Credit Card",
+          "status": true,
+          "custody_account": {
+            "id": "acc_001",
+            "name": "Main Account",
+            "account_number": "1234567890"
+          },
+          "amount_currency": "USD",
+          "amount_exchange": 150.00,
+          "amount_exchange_rate": 1.0,
+          "point_sale_tmt": false
+        }
+      ],
+      "infotickets": [
+        "evt_123-tkt_001",
+        "evt_123-tkt_002"
+      ],
+      "event_id": "evt_123",
+      "customer_email": "john@example.com",
+      "users_uid": "1"
+    }
+  }'
+```
+
+```javascript JavaScript
+const generateTransactions = async (orderData) => {
+  const requestData = {
+    data: {
+      idorder_id: orderData.orderId,
+      TransactionData: orderData.transactions.map(t => ({
+        amount: t.amount,
+        client_id: orderData.clientId,
+        client_name: orderData.clientName,
+        event_id: orderData.eventId,
+        event_name: orderData.eventName,
+        office_id: orderData.officeId,
+        office_name: orderData.officeName,
+        payment_data: t.paymentData,
+        payment_id: t.paymentId,
+        payment_name: t.paymentName,
+        status: t.status,
+        custody_account: t.custodyAccount,
+        amount_currency: t.currency,
+        amount_exchange: t.exchangeAmount,
+        amount_exchange_rate: t.exchangeRate,
+        point_sale_tmt: t.isTMTPOS
+      })),
+      infotickets: orderData.ticketIds,
+      event_id: orderData.eventId,
+      customer_email: orderData.customerEmail,
+      users_uid: orderData.userId || "1"
+    }
+  };
+
+  const response = await fetch('https://api.tmt.com/transactions_generate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestData)
+  });
+
+  const result = await response.json();
+  
+  if (result.data.valido) {
+    console.log('Transactions generated successfully');
+  }
+  
+  return result;
+};
+
+// Example usage
+const orderData = {
+  orderId: 'order_123',
+  clientId: 'client_789',
+  clientName: 'Event Productions LLC',
+  eventId: 'evt_123',
+  eventName: 'Summer Concert 2024',
+  officeId: 'off_001',
+  officeName: 'Main Office',
+  customerEmail: 'john@example.com',
+  ticketIds: ['evt_123-tkt_001', 'evt_123-tkt_002'],
+  transactions: [
+    {
+      amount: 150.00,
+      paymentData: {
+        email: 'john@example.com',
+        name: 'John Doe',
+        phone: '+1234567890'
+      },
+      paymentId: 'pay_card_001',
+      paymentName: 'Credit Card',
+      status: true,
+      custodyAccount: {
+        id: 'acc_001',
+        name: 'Main Account',
+        account_number: '1234567890'
+      },
+      currency: 'USD',
+      exchangeAmount: 150.00,
+      exchangeRate: 1.0,
+      isTMTPOS: false
+    }
+  ]
+};
+
+await generateTransactions(orderData);
+```
+
+</CodeGroup>
+
+## Payment Data Formats
+
+The `payment_data` object structure varies by payment method:
+
+### Digital Wallet (Zelle, PayPal, etc.)
+```javascript
+{
+  email: "john@example.com",
+  name: "John Doe",
+  phone: "+1234567890"
+}
+```
+
+### Bank Transfer
+```javascript
+{
+  account_number: "1234567890",
+  bank: "Bank of America",
+  reference_number: "REF123456"
+}
+```
+
+### Mobile Payment
+```javascript
+{
+  bank: "Mobile Bank",
+  phone: "+1234567890",
+  reference_number: "REF123456"
+}
+```
+
+## Custody Account Transactions
+
+Each transaction is also stored in the custody account's transaction subcollection:
+
+```
+custody_accounts/{account_id}/transactions/{transaction_id}
+```
+
+With additional fields:
+- `amount_type`: "payment"
+- `order_transaction_id`: Reference to the main transaction document
+
+## User Ticket Association
+
+Tickets are copied to the user's account at:
+
+```
+u_users/{user_uid}/tickets/{ticket_id}
+```
+
+This allows users to:
+- View their purchased tickets
+- Access ticket details and QR codes
+- Manage ticket transfers
+
+<Warning>
+  If a user with the customer_email doesn't exist, the ticket linking will fail silently. Ensure users are created via the order_user endpoint before generating transactions.
+</Warning>
+
+## Database Operations
+
+The function performs writes to:
+
+1. **Firestore Collections:**
+   - `orders_transactions` - Main transaction records
+   - `custody_accounts/{id}/transactions` - Account-specific transactions
+   - `events/{id}/tickets` - Ticket status updates
+   - `u_users/{uid}/tickets` - User ticket copies
+
+2. **PostgreSQL Tables:**
+   - `orders_transactions` - Transaction records mirror
+   - `tickets` - Ticket status and ledger updates
+
+## Related Endpoints
+
+- [Order Process](/api/orders/order-process) - Calls this endpoint automatically
+- [Validate Transactions](/api/transactions/transactions-validate) - Validate transaction data before generation
+- [Order Created](/api/orders/order-created) - Initial order creation
+
+## Error Handling
+
+<Warning>
+  This endpoint does not return detailed error messages. Monitor Firestore write operations and check that all expected documents are created.
+</Warning>
+
+Common issues:
+- Missing custody account references
+- Invalid ticket IDs
+- Non-existent user accounts
+- Database write permission errors

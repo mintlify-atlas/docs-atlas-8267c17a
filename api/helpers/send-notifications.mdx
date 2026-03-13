@@ -1,0 +1,302 @@
+---
+title: 'Send Notifications'
+api: 'POST /send_notifications'
+description: 'Send push notifications to mobile app users'
+---
+
+## Overview
+
+This endpoint sends push notifications to mobile app users who have tickets for a specific event. It uses Firebase Cloud Messaging (FCM) to deliver notifications and tracks delivery status in PostgreSQL.
+
+## Request Body
+
+<ParamField body="data" type="object" required>
+  Request data wrapper
+  
+  <ParamField body="event_id" type="string" required>
+    Event ID to send notifications for (only users with orders for this event will receive notifications)
+  </ParamField>
+  
+  <ParamField body="title" type="string" required>
+    Notification title
+  </ParamField>
+  
+  <ParamField body="body" type="string" required>
+    Notification body text
+  </ParamField>
+  
+  <ParamField body="icono" type="string" required>
+    Image URL for notification icon/image
+  </ParamField>
+</ParamField>
+
+## Response
+
+### Success Response
+
+<ResponseField name="message" type="string">
+  "Procesado" when notifications are sent
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  200 for success
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    true on success
+  </ResponseField>
+</ResponseField>
+
+### No Users Response
+
+<ResponseField name="message" type="string">
+  "No enviados no hay usuarios" when no eligible users found
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  200 (still returns 200 even when no users)
+</ResponseField>
+
+### Error Response
+
+<ResponseField name="error" type="object">
+  <ResponseField name="code" type="string">
+    Error code (e.g., "internal")
+  </ResponseField>
+  
+  <ResponseField name="message" type="string">
+    Error message
+  </ResponseField>
+  
+  <ResponseField name="details" type="string">
+    Detailed error information
+  </ResponseField>
+</ResponseField>
+
+## Notification Flow
+
+1. **Query Users**: Retrieve all users with FCM tokens (`fcmToken != " "`)
+2. **Filter by Orders**: Check each user for orders matching the `event_id`
+3. **Batch Processing**: Send notifications in batches of 100 users
+4. **Track Delivery**: Store notification records in PostgreSQL
+5. **Handle Failures**: Update status for failed tokens
+
+## Database Tracking
+
+### Notifications Table (`notifications_send`)
+
+<ParamField body="id" type="serial">
+  Auto-increment ID
+</ParamField>
+
+<ParamField body="event_id" type="string">
+  Event identifier
+</ParamField>
+
+<ParamField body="title" type="string">
+  Notification title
+</ParamField>
+
+<ParamField body="body" type="string">
+  Notification body
+</ParamField>
+
+<ParamField body="icon" type="string">
+  Image URL
+</ParamField>
+
+<ParamField body="date_created" type="timestamp">
+  Creation timestamp
+</ParamField>
+
+### Notification Details Table (`notifications_send_detail`)
+
+<ParamField body="id_notifications" type="integer">
+  Reference to notifications_send.id
+</ParamField>
+
+<ParamField body="fcmtoken" type="string">
+  User's FCM token
+</ParamField>
+
+<ParamField body="email" type="string">
+  User email
+</ParamField>
+
+<ParamField body="uid" type="string">
+  User ID
+</ParamField>
+
+<ParamField body="status" type="boolean">
+  Delivery status (true = sent, false = failed)
+</ParamField>
+
+<ParamField body="date_send" type="timestamp">
+  Send timestamp
+</ParamField>
+
+## Firebase Cloud Messaging
+
+### Message Structure
+
+```javascript
+{
+  notification: {
+    title: "Notification Title",
+    body: "Notification body text",
+    image: "https://example.com/image.jpg"
+  },
+  tokens: ["fcm_token_1", "fcm_token_2", ...] // up to 100 tokens
+}
+```
+
+### Batch Size
+- Maximum 100 tokens per batch
+- Automatic batching handled by endpoint
+- Prevents FCM quota issues
+
+## Example Request
+
+```json
+{
+  "data": {
+    "event_id": "event_001",
+    "title": "Event Starting Soon!",
+    "body": "Concert 2026 starts in 1 hour. Please arrive early for check-in.",
+    "icono": "https://cdn.example.com/events/concert2026.jpg"
+  }
+}
+```
+
+## Example Success Response
+
+```json
+{
+  "message": "Procesado",
+  "status": 200,
+  "data": {
+    "valido": true
+  }
+}
+```
+
+## Example No Users Response
+
+```json
+{
+  "message": "No enviados no hay usuarios",
+  "status": 200
+}
+```
+
+## Notification List
+
+### Endpoint
+`POST /list_notifications`
+
+### Description
+Retrieve sent notifications with optional filtering.
+
+### Request Body
+
+<ParamField body="data" type="object">
+  <ParamField body="uid" type="string">Filter by user ID</ParamField>
+  <ParamField body="event_id" type="string">Filter by event ID</ParamField>
+  <ParamField body="from" type="string">Start date (YYYY-MM-DD)</ParamField>
+  <ParamField body="to" type="string">End date (YYYY-MM-DD)</ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="object">
+  <ResponseField name="valido" type="boolean">
+    true if notifications found
+  </ResponseField>
+  
+  <ResponseField name="response" type="array">
+    Array of notification records with delivery details
+  </ResponseField>
+</ResponseField>
+
+## Use Cases
+
+### Event Reminders
+```json
+{
+  "event_id": "event_001",
+  "title": "Event Tomorrow!",
+  "body": "Don't forget: Concert 2026 is tomorrow at 8 PM. See you there!",
+  "icono": "https://cdn.example.com/reminder.png"
+}
+```
+
+### Urgent Updates
+```json
+{
+  "event_id": "event_001",
+  "title": "Important Update",
+  "body": "Venue entrance has changed to Gate B. Please arrive 15 minutes early.",
+  "icono": "https://cdn.example.com/alert.png"
+}
+```
+
+### Promotional
+```json
+{
+  "event_id": "event_001",
+  "title": "Exclusive Merch Available",
+  "body": "Limited edition merchandise available at the venue. Visit booth 12!",
+  "icono": "https://cdn.example.com/merch.png"
+}
+```
+
+### Post-Event
+```json
+{
+  "event_id": "event_001",
+  "title": "Thank You!",
+  "body": "Thanks for attending Concert 2026! Rate your experience in the app.",
+  "icono": "https://cdn.example.com/thankyou.png"
+}
+```
+
+## Best Practices
+
+1. **Timing**: Send at appropriate times (avoid late night)
+2. **Relevance**: Only send to users with tickets
+3. **Frequency**: Don't over-notify (causes uninstalls)
+4. **Content**: Keep messages concise and actionable
+5. **Images**: Use high-quality, relevant images
+6. **Testing**: Test on different devices before mass send
+7. **Analytics**: Monitor delivery and failure rates
+
+## Error Handling
+
+### Failed Tokens
+- Automatically tracked in database
+- Status set to `false` for failed deliveries
+- Failed tokens logged for investigation
+- Common causes:
+  - App uninstalled
+  - Token expired
+  - User disabled notifications
+  - Network issues
+
+### Batch Failures
+- Individual token failures don't stop batch
+- Each batch processes independently
+- Failed tokens reported in response
+
+## Performance
+
+- **Batch Size**: 100 users per batch
+- **Processing**: Sequential batch processing
+- **Database**: Efficient bulk inserts
+- **Tracking**: Full delivery audit trail
+
+## Related Endpoints
+
+- `send_email` - Email notifications
+- `list_notifications` - Query sent notifications
+- `update_events_status` - Automated event status updates

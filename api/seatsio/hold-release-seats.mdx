@@ -1,0 +1,389 @@
+---
+title: 'Hold & Release Seats'
+api: 'POST Multiple Endpoints'
+description: 'Manage seat holds and bookings in Seats.io for event reservations'
+---
+
+## Overview
+
+The seat hold and booking system allows you to temporarily reserve seats during the checkout process and then confirm or release them. This prevents double-booking and ensures customers have time to complete their purchase.
+
+## Hold Seats
+
+### Endpoint
+`POST /hold_seats_seatsio`
+
+### Description
+Temporarily hold seats for a customer. Held seats are reserved for a limited time (default 10 minutes) and cannot be booked by other customers.
+
+### Request
+
+<ParamField body="event_id" type="string" required>
+  The unique identifier of the event in Seats.io.
+</ParamField>
+
+<ParamField body="seats" type="array" required>
+  Array of seat identifiers to hold. Can include:
+  - Simple seat IDs: `["A-1", "A-2", "B-5"]`
+  - General Admission with quantity: `[{"objectId": "GA1", "quantity": 5}]`
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Asientos reservados correctamente"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="hold" type="object">
+    Hold confirmation details including:
+    - `objects`: Array of held seat objects with their current status
+    - Hold token is automatically generated with 10-minute expiration
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "concert-2026-12-31",
+    "seats": ["A-1", "A-2", "A-3"]
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Asientos reservados correctamente",
+  "status": 200,
+  "data": {
+    "hold": {
+      "objects": [
+        {
+          "label": "A-1",
+          "status": "held",
+          "categoryKey": "VIP",
+          "categoryLabel": "VIP"
+        },
+        {
+          "label": "A-2",
+          "status": "held",
+          "categoryKey": "VIP",
+          "categoryLabel": "VIP"
+        },
+        {
+          "label": "A-3",
+          "status": "held",
+          "categoryKey": "VIP",
+          "categoryLabel": "VIP"
+        }
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Release Seats
+
+### Endpoint
+`POST /release_seats_seatsio`
+
+### Description
+Release previously held seats, making them available for other customers. Can release specific seats or all seats associated with a hold token.
+
+### Request
+
+<ParamField body="event_id" type="string" required>
+  The unique identifier of the event in Seats.io.
+</ParamField>
+
+<ParamField body="seats" type="array" required>
+  Array of seat identifiers to release. Format matches the hold request.
+</ParamField>
+
+<ParamField body="hold_token" type="object" optional>
+  Optional hold token. If provided, releases all seats associated with this token. If omitted, releases the specified seats regardless of hold token.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Asientos liberados correctamente"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="release" type="object">
+    Release confirmation details with updated seat statuses.
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "concert-2026-12-31",
+    "seats": ["A-1", "A-2", "A-3"],
+    "hold_token": {
+      "token": "abc123xyz",
+      "expiresAt": "2026-03-13T11:00:00Z"
+    }
+  }
+}
+```
+
+---
+
+## Expire Hold Token
+
+### Endpoint
+`POST /expire_hold_token_seatsio`
+
+### Description
+Immediately expire a hold token, releasing all associated seats. This is useful when a customer cancels their checkout or the session times out.
+
+### Request
+
+<ParamField body="hold_token" type="object" required>
+  The hold token object to expire.
+  
+  <ParamField body="hold_token.token" type="string" required>
+    The token string.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Hold token expirado correctamente. Todos los asientos han sido liberados."
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="hold_token" type="object">
+    The expired hold token.
+  </ResponseField>
+  
+  <ResponseField name="expired" type="boolean">
+    Confirmation that the token was expired (true).
+  </ResponseField>
+</ResponseField>
+
+---
+
+## Book Seats
+
+### Endpoint
+`POST /book_seats_seatsio`
+
+### Description
+Confirm seat bookings, converting held seats to permanently booked status. This should be called after payment is confirmed.
+
+**Important**: This endpoint handles both regular seats and General Admission (GA) areas with different methods:
+- Regular seats: Uses `book()` method
+- General Admission: Uses `changeObjectStatus()` method
+
+### Request
+
+<ParamField body="event_id" type="string" required>
+  The unique identifier of the event in Seats.io.
+</ParamField>
+
+<ParamField body="seats" type="array" required>
+  Mixed array of seat bookings:
+  - String format for regular seats: `"A-1"`
+  - Object format for GA: `{"objectId": "GA1", "quantity": 5}`
+</ParamField>
+
+<ParamField body="hold_token" type="object" required>
+  The hold token that was used to hold the seats. Required to prevent booking seats held by other sessions.
+  
+  <ParamField body="hold_token.token" type="string" required>
+    The token string.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Status message: "Asientos confirmados correctamente"
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 on success)
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <ResponseField name="booked" type="object">
+    <ResponseField name="normalSeatsBooked" type="object">
+      Result of booking regular seats.
+    </ResponseField>
+    
+    <ResponseField name="gaSeatsBooked" type="array">
+      Array of GA booking results, each containing:
+      - `objectId`: GA section identifier
+      - `quantity`: Number of tickets booked
+      - `result`: Booking confirmation
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="summary" type="object">
+    <ResponseField name="normalSeats" type="number">
+      Count of regular seats booked.
+    </ResponseField>
+    
+    <ResponseField name="gaSeats" type="number">
+      Count of GA bookings.
+    </ResponseField>
+    
+    <ResponseField name="total" type="number">
+      Total number of seat items in the request.
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+### Example Request
+
+```json
+{
+  "data": {
+    "event_id": "concert-2026-12-31",
+    "seats": [
+      "A-1",
+      "A-2",
+      "A-3",
+      {
+        "objectId": "GA1",
+        "quantity": 5
+      }
+    ],
+    "hold_token": {
+      "token": "abc123xyz",
+      "expiresAt": "2026-03-13T11:00:00Z"
+    }
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "message": "Asientos confirmados correctamente",
+  "status": 200,
+  "data": {
+    "booked": {
+      "normalSeatsBooked": {
+        "objects": [
+          {"label": "A-1", "status": "booked"},
+          {"label": "A-2", "status": "booked"},
+          {"label": "A-3", "status": "booked"}
+        ]
+      },
+      "gaSeatsBooked": [
+        {
+          "objectId": "GA1",
+          "quantity": 5,
+          "result": {"status": "booked"}
+        }
+      ]
+    },
+    "event_id": "concert-2026-12-31",
+    "hold_token": {"token": "abc123xyz"},
+    "summary": {
+      "normalSeats": 3,
+      "gaSeats": 1,
+      "total": 4
+    }
+  }
+}
+```
+
+---
+
+## Booking Flow
+
+A typical seat booking flow follows these steps:
+
+1. **Hold Seats**: Customer selects seats → Call `/hold_seats_seatsio`
+   - Creates hold token with 10-minute expiration
+   - Prevents other customers from booking these seats
+
+2. **Payment Process**: Customer enters payment information
+   - Seats remain held during checkout
+   - If hold expires, customer must restart
+
+3. **Confirm Booking**: Payment successful → Call `/book_seats_seatsio`
+   - Converts held seats to permanently booked
+   - Uses hold token to verify ownership
+
+4. **Or Release Seats**: Customer cancels → Call `/release_seats_seatsio` or `/expire_hold_token_seatsio`
+   - Makes seats available for others
+
+### Timeout Handling
+
+Hold tokens automatically expire after 10 minutes. Best practices:
+- Display countdown timer to customer
+- Warn customer before expiration (e.g., at 2 minutes remaining)
+- Automatically release seats when customer leaves checkout
+- Handle expired holds gracefully by prompting customer to restart
+
+---
+
+## Implementation Details
+
+- Hold tokens are created with 10-minute expiration by default
+- Uses Seats.io South America region (`Region.SA()`)
+- All operations are CORS-enabled
+- Mixed seat types (regular + GA) are handled automatically
+- Hold token verification prevents race conditions and double-booking
+
+## Error Handling
+
+Common error scenarios:
+
+```json
+// Seats already held by another session
+{
+  "code": "SEATS_NOT_FREE",
+  "message": "Some seats are not free"
+}
+
+// Hold token expired
+{
+  "code": "HOLD_TOKEN_EXPIRED",
+  "message": "The hold token has expired"
+}
+
+// Invalid seat IDs
+{
+  "code": "OBJECTS_NOT_FOUND",
+  "message": "Some objects were not found"
+}
+```
+
+## Related Endpoints
+
+- [Create Event](/api/seatsio/create-event) - Create events for booking
+- [Virtual Office](/api/offices/virtual-office) - Virtual ticket management
+- [Offline Office](/api/offices/offline-office) - Offline ticket synchronization
+
+## Source Reference
+
+Implementation: `/home/daytona/workspace/source/functions/seatsio/seatsio.js:184-342`

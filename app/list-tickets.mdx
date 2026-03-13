@@ -1,0 +1,415 @@
+---
+title: 'List Tickets'
+api: 'POST https://us-central1-{project}.cloudfunctions.net/app_list_tickets'
+description: 'Retrieve all tickets owned by a user'
+---
+
+## Overview
+
+The `app_list_tickets` endpoint returns all tickets owned by a user, including ticket details, event information, QR codes, and access status.
+
+## Request
+
+### Endpoint
+
+```
+POST https://us-central1-{project}.cloudfunctions.net/app_list_tickets
+```
+
+### Headers
+
+| Header | Value |
+|--------|-------|
+| Content-Type | `application/json` |
+| Authorization | `Bearer {firebase_id_token}` |
+
+### Body Parameters
+
+<ParamField path="user_id" type="string" required>
+  User ID from Firebase Authentication
+</ParamField>
+
+<ParamField path="event_id" type="string">
+  Filter tickets by specific event ID (optional)
+</ParamField>
+
+<ParamField path="status" type="string">
+  Filter by access status: `"unused"`, `"used"`, or `"all"` (default)
+</ParamField>
+
+### Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST \
+  https://us-central1-{project}.cloudfunctions.net/app_list_tickets \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer {token}' \
+  -d '{
+    "data": {
+      "user_id": "user_abc123",
+      "status": "unused"
+    }
+  }'
+```
+
+```javascript JavaScript
+const listTickets = async (userId, eventId = null, status = 'all') => {
+  const response = await fetch(
+    'https://us-central1-{project}.cloudfunctions.net/app_list_tickets',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify({
+        data: { user_id: userId, event_id: eventId, status }
+      })
+    }
+  );
+  
+  return await response.json();
+};
+
+const tickets = await listTickets('user_abc123', 'evt_xyz789', 'unused');
+console.log(tickets);
+```
+
+```swift iOS (Swift)
+import FirebaseFunctions
+
+func listTickets(userId: String, eventId: String? = nil) async throws -> [Ticket] {
+    let functions = Functions.functions()
+    var data: [String: Any] = ["user_id": userId]
+    if let eventId = eventId {
+        data["event_id"] = eventId
+    }
+    
+    let result = try await functions.httpsCallable("app_list_tickets").call(data)
+    guard let tickets = result.data as? [[String: Any]] else {
+        throw TicketError.invalidResponse
+    }
+    
+    return tickets.compactMap { Ticket(dictionary: $0) }
+}
+
+let tickets = try await listTickets(userId: user.uid, eventId: "evt_xyz789")
+```
+
+</CodeGroup>
+
+## Response
+
+### Success Response
+
+<ResponseField name="status" type="number">
+  HTTP status code (200 for success)
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of ticket objects
+  
+  <Expandable title="Ticket object">
+    <ResponseField name="ticket_id" type="string">
+      Unique ticket identifier
+    </ResponseField>
+    
+    <ResponseField name="event_id" type="string">
+      Associated event ID
+    </ResponseField>
+    
+    <ResponseField name="event_name" type="string">
+      Name of the event
+    </ResponseField>
+    
+    <ResponseField name="event_date" type="timestamp">
+      Event start date and time
+    </ResponseField>
+    
+    <ResponseField name="zone" type="string">
+      Seating zone name
+    </ResponseField>
+    
+    <ResponseField name="seat_id" type="string">
+      Seat identifier (e.g., "VIP-1")
+    </ResponseField>
+    
+    <ResponseField name="seat_row" type="string">
+      Row identifier
+    </ResponseField>
+    
+    <ResponseField name="color" type="string">
+      Zone color code (hex)
+    </ResponseField>
+    
+    <ResponseField name="price" type="number">
+      Ticket price
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string">
+      Currency code
+    </ResponseField>
+    
+    <ResponseField name="qr_code" type="string">
+      Base64 encoded QR code image or QR data string
+    </ResponseField>
+    
+    <ResponseField name="access_status" type="boolean">
+      Whether ticket has been used to enter venue
+    </ResponseField>
+    
+    <ResponseField name="access_entry" type="timestamp" optional>
+      Entry timestamp if accessed
+    </ResponseField>
+    
+    <ResponseField name="access_exit" type="timestamp" optional>
+      Exit timestamp if customer left venue
+    </ResponseField>
+    
+    <ResponseField name="transferable" type="boolean">
+      Whether ticket can be transferred to another user
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": 200,
+  "data": [
+    {
+      "ticket_id": "evt_xyz789-tk_1",
+      "event_id": "evt_xyz789",
+      "event_name": "Summer Music Festival 2026",
+      "event_date": "2026-07-15T18:00:00Z",
+      "zone": "VIP",
+      "seat_id": "VIP-1",
+      "seat_row": "A",
+      "color": "#FFD700",
+      "price": 150.00,
+      "currency": "USD",
+      "qr_code": "data:image/png;base64,iVBORw0KGgoAAAANS...",
+      "access_status": false,
+      "transferable": true
+    },
+    {
+      "ticket_id": "evt_xyz789-tk_2",
+      "event_id": "evt_xyz789",
+      "event_name": "Summer Music Festival 2026",
+      "event_date": "2026-07-15T18:00:00Z",
+      "zone": "VIP",
+      "seat_id": "VIP-2",
+      "seat_row": "A",
+      "color": "#FFD700",
+      "price": 150.00,
+      "currency": "USD",
+      "qr_code": "data:image/png;base64,iVBORw0KGgoAAAANS...",
+      "access_status": true,
+      "access_entry": "2026-07-15T18:15:00Z",
+      "transferable": false
+    }
+  ]
+}
+```
+
+<Note>
+  Tickets that have been used for entry (`access_status: true`) are typically non-transferable.
+</Note>
+
+## Mobile App Implementation
+
+### Ticket Display Component
+
+```javascript
+import React from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+
+const TicketCard = ({ ticket }) => {
+  const isUsed = ticket.access_status;
+  
+  return (
+    <View style={[styles.card, isUsed && styles.usedCard]}>
+      {/* Event Info */}
+      <Text style={styles.eventName}>{ticket.event_name}</Text>
+      <Text style={styles.date}>
+        {new Date(ticket.event_date).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })}
+      </Text>
+      
+      {/* Seat Info */}
+      <View style={styles.seatInfo}>
+        <View style={[styles.zoneBadge, { backgroundColor: ticket.color }]}>
+          <Text style={styles.zoneText}>{ticket.zone}</Text>
+        </View>
+        <Text style={styles.seatId}>Seat: {ticket.seat_id}</Text>
+      </View>
+      
+      {/* QR Code */}
+      <View style={styles.qrContainer}>
+        <QRCode
+          value={ticket.ticket_id}
+          size={200}
+          backgroundColor="white"
+          color="black"
+        />
+      </View>
+      
+      {/* Status */}
+      {isUsed && (
+        <View style={styles.usedBadge}>
+          <Text style={styles.usedText}>
+            ✓ Scanned at {new Date(ticket.access_entry).toLocaleTimeString()}
+          </Text>
+        </View>
+      )}
+      
+      {/* Ticket ID */}
+      <Text style={styles.ticketId}>{ticket.ticket_id}</Text>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  usedCard: {
+    opacity: 0.7,
+    borderColor: '#4CAF50',
+    borderWidth: 2
+  },
+  eventName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8
+  },
+  date: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16
+  },
+  seatInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  zoneBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 12
+  },
+  zoneText: {
+    color: '#fff',
+    fontWeight: 'bold'
+  },
+  seatId: {
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  qrContainer: {
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    marginBottom: 16
+  },
+  usedBadge: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12
+  },
+  usedText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontWeight: '600'
+  },
+  ticketId: {
+    fontSize: 10,
+    color: '#999',
+    textAlign: 'center'
+  }
+});
+
+export default TicketCard;
+```
+
+## Filter by Event
+
+```javascript
+const listTicketsByEvent = async (userId, eventId) => {
+  const result = await listTickets(userId, eventId);
+  return result.data;
+};
+
+// Get only unused tickets for upcoming events
+const upcomingTickets = tickets.data.filter(t => 
+  !t.access_status && new Date(t.event_date) > new Date()
+);
+```
+
+## Offline Support
+
+<Tip>
+  Cache tickets locally for offline access:
+</Tip>
+
+```javascript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const cacheTickets = async (tickets) => {
+  await AsyncStorage.setItem('cached_tickets', JSON.stringify(tickets));
+};
+
+const getCachedTickets = async () => {
+  const cached = await AsyncStorage.getItem('cached_tickets');
+  return cached ? JSON.parse(cached) : [];
+};
+
+// Load tickets with offline fallback
+const loadTickets = async (userId) => {
+  try {
+    const result = await listTickets(userId);
+    await cacheTickets(result.data);
+    return result.data;
+  } catch (error) {
+    console.warn('Using cached tickets:', error);
+    return await getCachedTickets();
+  }
+};
+```
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Transfer Tickets" icon="arrow-right-arrow-left" href="/app/transfer-tickets">
+    Transfer ticket ownership
+  </Card>
+  <Card title="List Orders" icon="cart-shopping" href="/app/list-orders">
+    View order history
+  </Card>
+  <Card title="Tickets by Event" icon="calendar" href="/app/list-tickets">
+    Filter tickets by event
+  </Card>
+  <Card title="Access Control" icon="door-open" href="/api/events/tickets-access-control">
+    Ticket scanning at venue
+  </Card>
+</CardGroup>
