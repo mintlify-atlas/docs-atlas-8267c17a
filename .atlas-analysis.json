@@ -1,0 +1,191 @@
+{
+  "projectType": "api-service",
+  "projectName": "TMT API",
+  "projectDescription": "Firebase Cloud Functions backend for ticket management and event ticketing platform",
+  "theme": "aspen",
+  "primaryColor": "#8B5CF6",
+  "lightColor": "#A78BFA",
+  "darkColor": "#6D28D9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/events",
+              "concepts/tickets",
+              "concepts/orders"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/user-management",
+              "guides/event-setup",
+              "guides/ticket-generation",
+              "guides/payment-processing",
+              "guides/access-control"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Users",
+            "pages": [
+              "api/users/create-client",
+              "api/users/create-collaborator",
+              "api/users/create-staff",
+              "api/users/validate-user",
+              "api/users/update-user"
+            ]
+          },
+          {
+            "group": "Events & Tickets",
+            "pages": [
+              "api/events/tickets-generate",
+              "api/events/tickets-list",
+              "api/events/tickets-lock",
+              "api/events/tickets-access-control"
+            ]
+          },
+          {
+            "group": "Orders & Transactions",
+            "pages": [
+              "api/orders/order-created",
+              "api/orders/order-process",
+              "api/orders/order-payout",
+              "api/transactions/transactions-generate",
+              "api/transactions/transactions-validate"
+            ]
+          },
+          {
+            "group": "Payment Integrations",
+            "pages": [
+              "api/banking/stripe",
+              "api/banking/mercantil",
+              "api/banking/banco-venezuela"
+            ]
+          },
+          {
+            "group": "Seating & Venues",
+            "pages": [
+              "api/seatsio/create-event",
+              "api/seatsio/manage-charts",
+              "api/seatsio/hold-release-seats"
+            ]
+          },
+          {
+            "group": "Office Management",
+            "pages": [
+              "api/offices/office-validate",
+              "api/offices/virtual-office",
+              "api/offices/offline-office"
+            ]
+          },
+          {
+            "group": "Billing & Invoicing",
+            "pages": [
+              "api/billing/billing-emision",
+              "api/billing/process-order-billing"
+            ]
+          },
+          {
+            "group": "Analytics",
+            "pages": [
+              "api/indicators/money-distribution",
+              "api/indicators/sales-metrics",
+              "api/indicators/platform-data"
+            ]
+          },
+          {
+            "group": "Helpers & Utilities",
+            "pages": [
+              "api/helpers/send-email",
+              "api/helpers/send-notifications",
+              "api/helpers/exchange-rates"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Mobile App",
+        "groups": [
+          {
+            "group": "App Users API",
+            "pages": [
+              "app/validate-user",
+              "app/list-orders",
+              "app/list-tickets",
+              "app/transfer-tickets"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-user ticketing system with role-based access (clients, collaborators, staff)",
+    "Event ticket generation and inventory management with seat mapping",
+    "Order processing with multi-currency and payment gateway support (Stripe, Mercantil, Banco de Venezuela)",
+    "Integration with Seats.io for venue seating and chart management",
+    "Access control system for event entry and exit tracking",
+    "Virtual and offline ticket office capabilities with synchronization",
+    "Digital billing and invoicing with TFHKA integration",
+    "Real-time analytics and indicators for sales, revenue, and platform metrics",
+    "Mobile app API for ticket viewing, transfer, and QR code access",
+    "Conciliation system for transaction reconciliation with banks"
+  ],
+  "publicApiSurface": [
+    "create_client",
+    "create_collaborator",
+    "create_staff",
+    "validate_user_platform",
+    "tickets_generate",
+    "tickets_list_event",
+    "tickets_lock",
+    "tickets_unlock",
+    "tickets_access_control_in",
+    "tickets_access_control_out",
+    "order_created",
+    "order_process",
+    "order_payout",
+    "transactions_generate",
+    "transactions_validate",
+    "stripe_create_payment_intent",
+    "stripe_confirm_payment",
+    "api_mercantil_tdc_pay",
+    "api_mercantil_c2p_pay",
+    "mobile_payment_bcv",
+    "create_event_seatsio",
+    "hold_seats_seatsio",
+    "book_seats_seatsio",
+    "office_validate",
+    "tickets_list_event_virtual",
+    "offline_office_tickets_synchronization",
+    "billing_emision",
+    "process_order_billing",
+    "money_distribution",
+    "total_sales",
+    "app_user_validate",
+    "app_list_orders",
+    "app_list_tickets",
+    "app_transfer_tickets",
+    "send_email",
+    "send_notifications",
+    "exchange_rates"
+  ]
+}
